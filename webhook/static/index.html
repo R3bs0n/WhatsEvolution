@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disparador WhatsApp</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Inter', sans-serif; }
+  .drop-zone { border: 2px dashed #CBD5E1; transition: all .2s; }
+  .drop-zone.over { border-color: #2563EB; background: #EFF6FF; }
+  .tab-active { color: #2563EB !important; border-bottom: 2px solid #2563EB; }
+  .badge-ok   { background:#DCFCE7; color:#16A34A; }
+  .badge-erro { background:#FEE2E2; color:#DC2626; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .spinner { width:20px; height:20px; border:3px solid #e5e7eb; border-top-color:#2563EB;
+             border-radius:50%; animation:spin .7s linear infinite; }
+  tr.row-hover:hover td { background:#F9FAFB; }
+  .page-btn { padding:.25rem .6rem; border:1px solid #E5E7EB; border-radius:.4rem;
+              font-size:.8rem; color:#374151; cursor:pointer; transition:background .15s; }
+  .page-btn:hover:not(:disabled) { background:#F3F4F6; }
+  .page-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .page-btn.active { background:#2563EB; color:#fff; border-color:#2563EB; }
+  .btn-del { color:#94a3b8; transition:color .15s; background:none; border:none; cursor:pointer; padding:0; }
+  .btn-del:hover { color:#ef4444; }
+  @keyframes fadeout { from{opacity:1;max-height:60px} to{opacity:0;max-height:0} }
+  tr.removing { animation: fadeout .25s ease forwards; overflow:hidden; }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- HEADER -->
+<header class="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm">
+  <div class="max-w-5xl mx-auto px-5 flex items-center justify-between h-14">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center shadow-sm">
+        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.132.558 4.13 1.528 5.862L0 24l6.335-1.502A11.926 11.926 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.013-1.376l-.36-.214-3.727.883.936-3.617-.235-.372A9.779 9.779 0 012.182 12c0-5.419 4.399-9.818 9.818-9.818 5.419 0 9.818 4.399 9.818 9.818 0 5.42-4.399 9.818-9.818 9.818z"/>
+        </svg>
+      </div>
+      <span class="font-semibold text-slate-800 text-sm">Disparador WhatsApp</span>
+    </div>
+    <nav class="flex">
+      <button id="tab-upload" onclick="switchTab('upload')"
+        class="tab-active px-5 py-4 text-sm font-medium text-slate-500 hover:text-slate-800 border-b-2 border-transparent transition-colors">
+        📄 Importar PDF
+      </button>
+      <button id="tab-send" onclick="switchTab('send')"
+        class="px-5 py-4 text-sm font-medium text-slate-500 hover:text-slate-800 border-b-2 border-transparent transition-colors">
+        📤 Disparar
+      </button>
+      <button id="tab-logs" onclick="switchTab('logs')"
+        class="px-5 py-4 text-sm font-medium text-slate-500 hover:text-slate-800 border-b-2 border-transparent transition-colors">
+        📋 Logs
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-5 py-7">
+
+<!-- ══ TAB 1 — UPLOAD ════════════════════════════════════════════════════ -->
+<div id="view-upload">
+
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+    <h2 class="text-base font-semibold text-slate-800 mb-4">Importar arquivo PDF</h2>
+    <div id="drop-zone"
+      class="drop-zone rounded-xl p-12 text-center cursor-pointer select-none"
+      onclick="document.getElementById('file-input').click()">
+      <div class="text-5xl mb-3">📎</div>
+      <p class="text-slate-600 font-medium">Arraste o PDF aqui ou clique para selecionar</p>
+      <p class="text-slate-400 text-sm mt-1">Extração automática de nome, telefone, exame, CPF e idade</p>
+      <input type="file" id="file-input" accept=".pdf" class="hidden" onchange="handleFile(this.files[0])">
+    </div>
+    <div id="upload-loading" class="hidden flex items-center gap-3 justify-center mt-5 text-blue-600">
+      <div class="spinner"></div>
+      <span class="text-sm font-medium" id="loading-msg">Processando PDF…</span>
+    </div>
+    <div id="upload-error" class="hidden mt-4 p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"></div>
+  </div>
+
+  <!-- Patient list -->
+  <div id="patients-section" class="hidden">
+
+    <!-- Stats bar -->
+    <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+      <div class="flex items-center gap-3 flex-wrap">
+        <p class="text-sm text-slate-600">
+          <span id="stat-total" class="text-blue-600 font-bold text-base">0</span> pacientes
+          <span id="stat-deleted-wrap" class="hidden text-slate-400">
+            · <span id="stat-deleted" class="text-red-400">0</span> excluídos
+          </span>
+        </p>
+        <span id="sel-badge" class="hidden px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+          <span id="sel-count">0</span> selecionados
+        </span>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        <button onclick="selectPage()" class="text-blue-600 hover:text-blue-800 font-medium">Selecionar página</button>
+        <span class="text-slate-300">|</span>
+        <button onclick="selectAll()" class="text-blue-600 hover:text-blue-800 font-medium">Selecionar todos</button>
+        <span class="text-slate-300">|</span>
+        <button onclick="clearSel()" class="text-slate-400 hover:text-slate-600 font-medium">Limpar seleção</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="w-10 px-4 py-3.5 text-left">
+              <input type="checkbox" id="chk-all" onchange="togglePage(this.checked)"
+                class="rounded border-slate-300 text-blue-600">
+            </th>
+            <th class="px-4 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">#</th>
+            <th class="px-4 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Nome</th>
+            <th class="px-4 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Telefone</th>
+            <th class="px-4 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Exame</th>
+            <th class="px-4 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">CPF</th>
+            <th class="px-4 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-12">Idade</th>
+            <th class="w-10 px-4 py-3.5"></th>
+          </tr>
+        </thead>
+        <tbody id="patients-tbody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between mt-4 flex-wrap gap-2">
+      <p class="text-xs text-slate-400">
+        Página <span id="p-cur">1</span> de <span id="p-tot">1</span>
+        &nbsp;·&nbsp; <span id="p-range">1–50</span> de <span id="p-all">0</span>
+      </p>
+      <div id="p-nums" class="flex items-center gap-1 flex-wrap"></div>
+    </div>
+
+    <!-- Advance -->
+    <div class="flex justify-end mt-6">
+      <button onclick="switchTab('send')"
+        class="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm shadow-sm transition">
+        Configurar disparo
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div><!-- /view-upload -->
+
+
+<!-- ══ TAB 2 — SEND ══════════════════════════════════════════════════════ -->
+<div id="view-send" class="hidden grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+  <div class="lg:col-span-3 space-y-5">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h2 class="text-base font-semibold text-slate-800 mb-1">Template da mensagem</h2>
+      <p class="text-slate-400 text-xs mb-4">Clique nas variáveis para inserir no cursor.</p>
+      <textarea id="tpl-input" rows="6" oninput="refreshPreview()"
+        class="w-full border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">Olá, {name}. Identificamos seu exame: {exam_type}. Por favor, entre em contato conosco para mais informações.</textarea>
+      <div class="flex gap-2 mt-2.5 flex-wrap">
+        <button onclick="insertVar('{name}')"      class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-mono text-slate-600 transition">{name}</button>
+        <button onclick="insertVar('{exam_type}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-mono text-slate-600 transition">{exam_type}</button>
+        <button onclick="insertVar('{phone}')"     class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-mono text-slate-600 transition">{phone}</button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Pré-visualização</p>
+      <div class="bg-green-50 border border-green-200 rounded-xl p-4">
+        <div class="flex items-start gap-3">
+          <div class="w-7 h-7 bg-green-500 rounded-full flex-shrink-0 flex items-center justify-center mt-0.5 text-white text-xs font-bold">W</div>
+          <p id="preview-msg" class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lg:col-span-2 space-y-5">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <h2 class="text-base font-semibold text-slate-800 mb-4">Resumo do disparo</h2>
+      <div class="space-y-2">
+        <div class="flex justify-between items-center py-2 border-b border-slate-100">
+          <span class="text-sm text-slate-500">Selecionados</span>
+          <span id="sum-sel" class="font-bold text-slate-800 text-lg">0</span>
+        </div>
+        <div class="flex justify-between items-center py-2 border-b border-slate-100">
+          <span class="text-sm text-slate-500">Excluídos manualmente</span>
+          <span id="sum-del" class="text-red-400">0</span>
+        </div>
+        <div class="flex justify-between items-center py-2">
+          <span class="text-sm text-slate-500">Total no PDF</span>
+          <span id="sum-tot" class="text-slate-600">0</span>
+        </div>
+      </div>
+      <div id="warn-empty" class="hidden mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-xs">
+        ⚠️ Selecione pelo menos um paciente na aba <b>Importar PDF</b>.
+      </div>
+      <button id="dispatch-btn" onclick="dispatch()"
+        class="w-full mt-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold text-sm shadow-sm transition flex items-center justify-center gap-2">
+        <span>⚡</span><span id="dispatch-label">Disparar mensagens</span>
+      </button>
+    </div>
+
+    <div id="results-card" class="hidden bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Resultado</p>
+      <div class="grid grid-cols-3 gap-2 mb-4">
+        <div class="text-center p-3 bg-slate-50 rounded-xl">
+          <div id="r-total" class="text-2xl font-bold text-slate-800">0</div>
+          <div class="text-xs text-slate-400 mt-0.5">Total</div>
+        </div>
+        <div class="text-center p-3 bg-green-50 rounded-xl">
+          <div id="r-sent" class="text-2xl font-bold text-green-600">0</div>
+          <div class="text-xs text-green-500 mt-0.5">Enviadas</div>
+        </div>
+        <div class="text-center p-3 bg-red-50 rounded-xl">
+          <div id="r-failed" class="text-2xl font-bold text-red-500">0</div>
+          <div class="text-xs text-red-400 mt-0.5">Falhas</div>
+        </div>
+      </div>
+      <div id="fail-detail" class="hidden space-y-1.5 max-h-44 overflow-y-auto text-xs"></div>
+      <button onclick="switchTab('logs')"
+        class="w-full mt-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl text-sm font-medium transition">
+        Ver logs completos →
+      </button>
+    </div>
+  </div>
+</div><!-- /view-send -->
+
+
+<!-- ══ TAB 3 — LOGS ══════════════════════════════════════════════════════ -->
+<div id="view-logs" class="hidden">
+  <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-6 py-5 border-b border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-semibold text-slate-800">Logs de envio</h2>
+        <button onclick="loadLogs(1)"
+          class="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Atualizar
+        </button>
+      </div>
+      <div class="relative">
+        <svg class="absolute left-3.5 top-3 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="log-search" type="text" placeholder="Buscar por nome ou telefone"
+          oninput="logDebounce(this.value)"
+          class="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-16">#</th>
+            <th class="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Paciente</th>
+            <th class="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Telefone</th>
+            <th class="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-24">Status</th>
+            <th class="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide w-20">Código</th>
+            <th class="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">Enviado em</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody" class="divide-y divide-slate-100"></tbody>
+      </table>
+      <div id="log-empty" class="hidden py-16 text-center text-slate-400">
+        <div class="text-4xl mb-3">📋</div>
+        <p class="text-sm font-medium">Nenhum log encontrado</p>
+        <p class="text-xs mt-1">Os registros aparecem após o primeiro disparo</p>
+      </div>
+      <div id="log-loading" class="hidden py-12 flex justify-center"><div class="spinner"></div></div>
+    </div>
+
+    <div id="log-footer" class="hidden px-6 py-4 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
+      <p id="log-range" class="text-xs text-slate-400"></p>
+      <div id="log-nums" class="flex items-center gap-1 flex-wrap"></div>
+    </div>
+  </div>
+</div><!-- /view-logs -->
+
+</main>
+
+<script>
+const API = '';
+
+// ── state ──────────────────────────────────────────────────────────────────────
+let sessionId = null, curPage = 1, totPages = 1, totPat = 0;
+let selected = new Set();   // phones currently selected
+let deleted  = new Set();   // phones excluded by user
+let cache    = {};          // phone -> PatientData
+let logPage = 1, logSearch = '', logTimer = null;
+
+// ── tabs ───────────────────────────────────────────────────────────────────────
+function switchTab(t) {
+  ['upload','send','logs'].forEach(k => {
+    document.getElementById('view-'+k).classList.add('hidden');
+    document.getElementById('tab-'+k).classList.remove('tab-active');
+  });
+  document.getElementById('view-'+t).classList.remove('hidden');
+  document.getElementById('tab-'+t).classList.add('tab-active');
+  if (t === 'send') refreshSend();
+  if (t === 'logs') loadLogs(1);
+}
+
+// ── upload ─────────────────────────────────────────────────────────────────────
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+
+async function handleFile(file) {
+  if (!file || !file.name.toLowerCase().endsWith('.pdf')) { showErr('Selecione um arquivo PDF.'); return; }
+  clearErr(); setLoading(true, 'Processando PDF… isso pode levar alguns segundos para arquivos grandes.');
+  // reset state
+  sessionId = null; selected.clear(); deleted.clear(); cache = {};
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const r = await fetch(API+'/pdf/upload', { method:'POST', body:fd });
+    const d = await r.json();
+    if (!r.ok) { showErr(d.detail||'Erro ao processar o PDF.'); return; }
+    sessionId = d.session_id; totPat = d.total; totPages = d.total_pages;
+    d.patients.forEach(p => { cache[p.phone] = p; });
+    renderTable(d.patients, d.page, d.total, d.total_pages);
+    document.getElementById('patients-section').classList.remove('hidden');
+  } catch { showErr('Erro de conexão com o servidor.'); }
+  finally { setLoading(false); }
+}
+
+// ── table ──────────────────────────────────────────────────────────────────────
+function renderTable(patients, page, total, pages) {
+  curPage = page; totPages = pages; totPat = total;
+  patients.forEach(p => { if(!deleted.has(p.phone)) cache[p.phone] = p; });
+
+  const visible = patients.filter(p => !deleted.has(p.phone));
+  const off = (page-1)*50;
+  const allDeleted = patients.length > 0 && visible.length === 0;
+
+  document.getElementById('patients-tbody').innerHTML = allDeleted
+    ? `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400 text-sm">Todos os pacientes desta página foram excluídos.</td></tr>`
+    : visible.map((p, i) => {
+        const globalIdx = off + patients.findIndex(x => x.phone === p.phone) + 1;
+        return `<tr class="row-hover" id="row-${esc(p.phone)}">
+          <td class="px-4 py-3">
+            <input type="checkbox" class="pt-chk rounded border-slate-300 text-blue-600"
+              value="${esc(p.phone)}" ${selected.has(p.phone)?'checked':''}
+              onchange="togPat('${esc(p.phone)}',this.checked)">
+          </td>
+          <td class="px-4 py-3 text-slate-400 text-xs">${globalIdx}</td>
+          <td class="px-4 py-3 font-medium text-slate-800">${esc(p.name)}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-500">${p.phone}</td>
+          <td class="px-4 py-3 text-slate-600">${esc(p.exam_type)}</td>
+          <td class="px-4 py-3 text-slate-400 text-xs">${p.cpf||'—'}</td>
+          <td class="px-4 py-3 text-slate-400 text-xs">${p.age!=null?p.age+' a':'—'}</td>
+          <td class="px-4 py-3">
+            <button class="btn-del" title="Excluir paciente" onclick="deletePat('${esc(p.phone)}')">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+
+  const allChk = visible.length>0 && visible.every(p => selected.has(p.phone));
+  document.getElementById('chk-all').checked = allChk;
+  document.getElementById('stat-total').textContent = total - deleted.size;
+  const dw = document.getElementById('stat-deleted-wrap');
+  dw.classList.toggle('hidden', deleted.size === 0);
+  document.getElementById('stat-deleted').textContent = deleted.size;
+  renderPagination(page, pages, total);
+  updSelBadge();
+}
+
+function deletePat(phone) {
+  const row = document.getElementById('row-'+phone);
+  if (row) {
+    row.classList.add('removing');
+    setTimeout(() => {
+      deleted.add(phone);
+      selected.delete(phone);
+      delete cache[phone];
+      // re-render current page without going back to server
+      const tbody = document.getElementById('patients-tbody');
+      const rowEl = document.getElementById('row-'+phone);
+      if (rowEl) rowEl.remove();
+      // update counters
+      document.getElementById('stat-total').textContent = totPat - deleted.size;
+      const dw = document.getElementById('stat-deleted-wrap');
+      dw.classList.toggle('hidden', deleted.size === 0);
+      document.getElementById('stat-deleted').textContent = deleted.size;
+      updSelBadge();
+    }, 240);
+  }
+}
+
+function togPat(phone, on) {
+  on ? selected.add(phone) : selected.delete(phone);
+  updSelBadge();
+  const checks = [...document.querySelectorAll('.pt-chk')];
+  document.getElementById('chk-all').checked = checks.length>0 && checks.every(c=>c.checked);
+}
+function togglePage(on) {
+  document.querySelectorAll('.pt-chk').forEach(c => { c.checked=on; on?selected.add(c.value):selected.delete(c.value); });
+  updSelBadge();
+}
+function selectPage() { document.querySelectorAll('.pt-chk').forEach(c => { c.checked=true; selected.add(c.value); }); document.getElementById('chk-all').checked=true; updSelBadge(); }
+async function selectAll() {
+  setLoading(true, 'Selecionando todos os pacientes…');
+  for (let p=1; p<=totPages; p++) {
+    try {
+      const r = await fetch(`${API}/pdf/patients/${sessionId}?page=${p}`);
+      const d = await r.json();
+      d.patients.forEach(pt => { if (!deleted.has(pt.phone)) { cache[pt.phone]=pt; selected.add(pt.phone); } });
+    } catch {}
+  }
+  setLoading(false);
+  await goTo(curPage);
+}
+function clearSel() { selected.clear(); document.querySelectorAll('.pt-chk').forEach(c=>c.checked=false); document.getElementById('chk-all').checked=false; updSelBadge(); }
+function updSelBadge() {
+  const n = selected.size;
+  document.getElementById('sel-badge').classList.toggle('hidden', n===0);
+  document.getElementById('sel-count').textContent = n;
+}
+
+// ── pagination ─────────────────────────────────────────────────────────────────
+function renderPagination(page, pages, total) {
+  const s=(page-1)*50+1, e=Math.min(page*50,total);
+  document.getElementById('p-cur').textContent=page;
+  document.getElementById('p-tot').textContent=pages;
+  document.getElementById('p-range').textContent=`${s}–${e}`;
+  document.getElementById('p-all').textContent=total;
+  const nums=document.getElementById('p-nums'); nums.innerHTML='';
+  const add=(n,label)=>{
+    const b=document.createElement('button'); b.className='page-btn'+(n===page?' active':'');
+    b.textContent=label||n;
+    if(n==='…') b.disabled=true; else b.onclick=()=>goTo(n);
+    nums.appendChild(b);
+  };
+  if(page>1){const b=document.createElement('button');b.className='page-btn';b.textContent='←';b.onclick=()=>goTo(page-1);nums.appendChild(b);}
+  pRange(page,pages).forEach(n=>add(n));
+  if(page<pages){const b=document.createElement('button');b.className='page-btn';b.textContent='→';b.onclick=()=>goTo(page+1);nums.appendChild(b);}
+}
+function pRange(c,t) {
+  if(t<=7) return Array.from({length:t},(_,i)=>i+1);
+  if(c<=4) return [1,2,3,4,5,'…',t];
+  if(c>=t-3) return [1,'…',t-4,t-3,t-2,t-1,t];
+  return [1,'…',c-1,c,c+1,'…',t];
+}
+async function goTo(p) {
+  if(!sessionId||p<1||p>totPages) return;
+  const r=await fetch(`${API}/pdf/patients/${sessionId}?page=${p}`);
+  const d=await r.json();
+  d.patients.forEach(pt=>{ if(!deleted.has(pt.phone)) cache[pt.phone]=pt; });
+  renderTable(d.patients,d.page,d.total,d.total_pages);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ── send tab ───────────────────────────────────────────────────────────────────
+function refreshSend() {
+  const n = selected.size;
+  document.getElementById('sum-sel').textContent = n;
+  document.getElementById('sum-del').textContent = deleted.size;
+  document.getElementById('sum-tot').textContent = totPat;
+  document.getElementById('warn-empty').classList.toggle('hidden', n>0);
+  const btn=document.getElementById('dispatch-btn');
+  btn.disabled=n===0; btn.classList.toggle('opacity-50',n===0);
+  document.getElementById('dispatch-label').textContent=`Disparar ${n} mensagem${n!==1?'s':''}`;
+  refreshPreview();
+}
+function refreshPreview() {
+  const tpl=document.getElementById('tpl-input').value;
+  const sample=Object.values(cache)[0]||{name:'Maria Silva',exam_type:'Hemograma',phone:'5592999999999'};
+  document.getElementById('preview-msg').textContent=tpl
+    .replace(/\{name\}/g,sample.name)
+    .replace(/\{exam_type\}/g,sample.exam_type)
+    .replace(/\{phone\}/g,sample.phone);
+}
+function insertVar(v) {
+  const ta=document.getElementById('tpl-input'), pos=ta.selectionStart;
+  ta.value=ta.value.slice(0,pos)+v+ta.value.slice(ta.selectionEnd);
+  ta.setSelectionRange(pos+v.length,pos+v.length); ta.focus(); refreshPreview();
+}
+async function dispatch() {
+  if(!selected.size) return;
+  const tpl=document.getElementById('tpl-input').value.trim();
+  if(!tpl){alert('Preencha o template.');return;}
+  const patients=[...selected].map(ph=>cache[ph]).filter(Boolean);
+  if(!patients.length){alert('Nenhum dado encontrado. Refaça o upload.');return;}
+  const btn=document.getElementById('dispatch-btn');
+  btn.disabled=true; btn.innerHTML='<div class="spinner"></div><span>Enviando…</span>';
+  document.getElementById('results-card').classList.add('hidden');
+  try {
+    const r=await fetch(API+'/pdf/send',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({patients,selected_phones:[...selected],template:tpl})});
+    const d=await r.json();
+    if(!r.ok){alert(d.detail||'Erro ao disparar.');return;}
+    showResults(d);
+  } catch { alert('Erro de conexão.'); }
+  finally {
+    btn.disabled=selected.size===0;
+    btn.innerHTML=`<span>⚡</span><span id="dispatch-label">Disparar ${selected.size} mensagem${selected.size!==1?'s':''}</span>`;
+  }
+}
+function showResults(d) {
+  document.getElementById('results-card').classList.remove('hidden');
+  document.getElementById('r-total').textContent=d.total;
+  document.getElementById('r-sent').textContent=d.sent;
+  document.getElementById('r-failed').textContent=d.failed;
+  const fl=document.getElementById('fail-detail');
+  const fails=d.results.filter(r=>r.status==='failed');
+  if(fails.length){
+    fl.classList.remove('hidden');
+    fl.innerHTML='<p class="text-red-500 font-semibold mb-2">Detalhes das falhas:</p>'+
+      fails.map(f=>`<div class="flex justify-between py-1.5 border-b border-red-100">
+        <span class="text-slate-700">${esc(f.name)}</span>
+        <span class="text-red-400 font-mono">${esc(f.error||'Erro desconhecido')}</span></div>`).join('');
+  } else fl.classList.add('hidden');
+}
+
+// ── logs ───────────────────────────────────────────────────────────────────────
+async function loadLogs(p=1) {
+  const loading=document.getElementById('log-loading'),empty=document.getElementById('log-empty'),tbody=document.getElementById('log-tbody');
+  loading.classList.remove('hidden'); empty.classList.add('hidden');
+  document.getElementById('log-footer').classList.add('hidden'); tbody.innerHTML='';
+  try {
+    const params=new URLSearchParams({page:p,page_size:20});
+    if(logSearch) params.set('search',logSearch);
+    const r=await fetch(`${API}/pdf/logs?${params}`), d=await r.json();
+    logPage=d.page; loading.classList.add('hidden');
+    if(!d.logs.length){empty.classList.remove('hidden');return;}
+    tbody.innerHTML=d.logs.map(l=>`
+      <tr class="row-hover">
+        <td class="px-6 py-3.5 text-slate-400 text-xs">${l.id}</td>
+        <td class="px-6 py-3.5 font-medium text-slate-800">${esc(l.name)}</td>
+        <td class="px-6 py-3.5 font-mono text-xs text-slate-500">${l.phone}</td>
+        <td class="px-6 py-3.5">
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${l.status==='sent'?'badge-ok':'badge-erro'}">
+            ${l.status==='sent'?'OK':'ERRO'}
+          </span>
+        </td>
+        <td class="px-6 py-3.5 text-slate-400 text-xs">${l.code}</td>
+        <td class="px-6 py-3.5 text-slate-400 text-xs">${fmtDate(l.sent_at)}</td>
+      </tr>`).join('');
+    if(d.total_pages>1){
+      document.getElementById('log-footer').classList.remove('hidden');
+      const s=(d.page-1)*20+1,e=Math.min(d.page*20,d.total);
+      document.getElementById('log-range').textContent=`${s}–${e} de ${d.total} registros`;
+      const nums=document.getElementById('log-nums'); nums.innerHTML='';
+      if(d.page>1){const b=document.createElement('button');b.className='page-btn';b.textContent='← Anterior';b.onclick=()=>loadLogs(logPage-1);nums.appendChild(b);}
+      pRange(d.page,d.total_pages).forEach(n=>{
+        const b=document.createElement('button');b.className='page-btn'+(n===d.page?' active':'');
+        b.textContent=n;if(n==='…')b.disabled=true;else b.onclick=()=>loadLogs(n);nums.appendChild(b);
+      });
+      if(d.page<d.total_pages){const b=document.createElement('button');b.className='page-btn';b.textContent='Próxima →';b.onclick=()=>loadLogs(logPage+1);nums.appendChild(b);}
+    }
+  } catch { loading.classList.add('hidden'); empty.classList.remove('hidden'); }
+}
+function logDebounce(v){logSearch=v;clearTimeout(logTimer);logTimer=setTimeout(()=>loadLogs(1),400);}
+
+// ── utils ──────────────────────────────────────────────────────────────────────
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtDate(iso){try{const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
+function setLoading(on,msg='Processando PDF…'){document.getElementById('upload-loading').classList.toggle('hidden',!on);document.getElementById('loading-msg').textContent=msg;dz.classList.toggle('opacity-50',on);}
+function showErr(msg){const e=document.getElementById('upload-error');e.textContent=msg;e.classList.remove('hidden');}
+function clearErr(){document.getElementById('upload-error').classList.add('hidden');}
+
+refreshPreview();
+</script>
+</body>
+</html>
