@@ -91,7 +91,7 @@ async def send_messages(request: SendRequest) -> SendResponse:
         if not patient.phone or len(patient.phone) < 12:
             results.append(SendResultItem(
                 name=patient.name, phone=patient.phone,
-                status="failed", error="Telefone inválido",
+                status="failed", error="Telefone inválido ou ausente",
             ))
             continue
         result = await send_whatsapp_text(patient, request.template)

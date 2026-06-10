@@ -14,20 +14,19 @@ async def handle_incoming_message(payload: dict):
 
     logger.info("Evento recebido: %s  instância: %s", event_type, instance)
 
-    if event_type == "qrcode.updated":
-        base64_img = data.get("base64") or ""
+    if event_type == "QRCODE_UPDATED":
+        base64_img = data.get("qrcode", {}).get("base64") or ""
         if base64_img:
             qr_store[instance] = base64_img
             logger.info("QR Code atualizado para instância '%s' — acesse /qr/%s", instance, instance)
 
-    elif event_type == "connection.update":
+    elif event_type == "CONNECTION_UPDATE":
         state = data.get("state", "")
         logger.info("Conexão '%s': %s", instance, state)
         if state == "open":
-            # Remove QR once connected — it's no longer valid
             qr_store.pop(instance, None)
 
-    elif event_type == "messages.upsert":
+    elif event_type == "MESSAGES_UPSERT":
         messages = data if isinstance(data, list) else [data]
         for msg in messages:
             key = msg.get("key", {})

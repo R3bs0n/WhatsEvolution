@@ -27,12 +27,13 @@ docker compose up -d
 
 ## Serviços
 
-| Serviço                | URL                          | Descrição                        |
-|------------------------|------------------------------|----------------------------------|
-| **Sistema de Disparo** | http://localhost:8000        | Interface de envio em lote       |
-| Evolution API          | http://localhost:8080        | API principal do WhatsApp        |
-| Chatwoot               | http://localhost:3000        | Atendimento 1:1                  |
-| Swagger UI             | http://localhost:8000/docs   | Documentação interativa da API   |
+| Serviço                | URL                              | Descrição                        |
+|------------------------|----------------------------------|----------------------------------|
+| **Sistema de Disparo** | http://localhost:8000            | Interface de envio em lote       |
+| Evolution API          | http://localhost:8080            | API principal do WhatsApp        |
+| Evolution Manager      | http://localhost:8080/manager    | Painel de gerenciamento visual   |
+| Chatwoot               | http://localhost:3000            | Atendimento 1:1                  |
+| Swagger UI             | http://localhost:8000/docs       | Documentação interativa da API   |
 
 ## Criando uma instância e configurando o webhook
 

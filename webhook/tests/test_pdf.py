@@ -178,7 +178,7 @@ def test_extract_patients_deduplicates_phone():
 
 def test_extract_patients_raises_on_empty_pdf():
     with patch("app.services.pdf_parser.pdfplumber.open", return_value=_mock_pdf_open("")):
-        with pytest.raises(ValueError, match="texto legível"):
+        with pytest.raises(ValueError, match="Nenhum paciente encontrado"):
             extract_patients_from_pdf(b"fake-pdf")
 
 

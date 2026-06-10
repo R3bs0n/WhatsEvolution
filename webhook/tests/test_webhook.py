@@ -2,68 +2,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.conftest import (
+    messages_upsert_payload,
+    connection_update_payload,
+    qrcode_payload,
+    messages_update_payload,
+)
 
 client = TestClient(app)
-
-
-# ─── Fixtures ─────────────────────────────────────────────────────
-
-def messages_upsert_payload(from_me: bool = False, text: str = "Hello") -> dict:
-    return {
-        "event": "messages.upsert",
-        "instance": "test",
-        "data": [
-            {
-                "key": {
-                    "remoteJid": "5511999999999@s.whatsapp.net",
-                    "fromMe": from_me,
-                    "id": "ABCDEF123456",
-                },
-                "message": {"conversation": text},
-                "messageTimestamp": 1700000000,
-                "pushName": "Test User",
-                "status": "DELIVERY_ACK",
-            }
-        ],
-    }
-
-
-def connection_update_payload(state: str = "open") -> dict:
-    return {
-        "event": "connection.update",
-        "instance": "test",
-        "data": {"state": state, "statusReason": 200},
-    }
-
-
-def qrcode_payload() -> dict:
-    return {
-        "event": "qrcode.updated",
-        "instance": "test",
-        "data": {
-            "pairingCode": None,
-            "code": "2@abc123",
-            "base64": "data:image/png;base64,ABC==",
-            "count": 1,
-        },
-    }
-
-
-def messages_update_payload() -> dict:
-    return {
-        "event": "messages.update",
-        "instance": "test",
-        "data": [
-            {
-                "key": {
-                    "remoteJid": "5511999999999@s.whatsapp.net",
-                    "fromMe": True,
-                    "id": "ABCDEF123456",
-                },
-                "update": {"status": "READ"},
-            }
-        ],
-    }
 
 
 # ─── Health ───────────────────────────────────────────────────────
@@ -77,54 +23,64 @@ def test_health():
 # ─── Webhook endpoint ─────────────────────────────────────────────
 
 def test_incoming_text_message():
-    response = client.post("/webhook", json=messages_upsert_payload(from_me=False))
+    response = client.post("/webhook/", json=messages_upsert_payload(from_me=False))
     assert response.status_code == 200
-    assert response.json() == {"received": True}
+    assert response.json() == {"status": "received"}
 
 
 def test_outgoing_text_message():
-    response = client.post("/webhook", json=messages_upsert_payload(from_me=True))
+    response = client.post("/webhook/", json=messages_upsert_payload(from_me=True))
     assert response.status_code == 200
-    assert response.json() == {"received": True}
+    assert response.json() == {"status": "received"}
 
 
 def test_connection_open():
-    response = client.post("/webhook", json=connection_update_payload("open"))
+    response = client.post("/webhook/", json=connection_update_payload("open"))
     assert response.status_code == 200
 
 
 def test_connection_close():
-    response = client.post("/webhook", json=connection_update_payload("close"))
+    response = client.post("/webhook/", json=connection_update_payload("close"))
     assert response.status_code == 200
 
 
-def test_qrcode_updated():
-    response = client.post("/webhook", json=qrcode_payload())
+def test_qrcode_updated_stores_base64():
+    from app.services.message_handler import qr_store
+    response = client.post("/webhook/", json=qrcode_payload())
     assert response.status_code == 200
+    assert qr_store.get("clinica") == "data:image/png;base64,ABC=="
+
+
+def test_connection_open_clears_qr():
+    from app.services.message_handler import qr_store
+    qr_store["clinica"] = "data:image/png;base64,FAKE=="
+    response = client.post("/webhook/", json=connection_update_payload("open"))
+    assert response.status_code == 200
+    assert "clinica" not in qr_store
 
 
 def test_messages_update():
-    response = client.post("/webhook", json=messages_update_payload())
+    response = client.post("/webhook/", json=messages_update_payload())
     assert response.status_code == 200
 
 
 def test_unknown_event_is_ignored():
-    payload = {"event": "unknown.event", "instance": "test", "data": {}}
-    response = client.post("/webhook", json=payload)
+    payload = {"event": "UNKNOWN_EVENT", "instance": "clinica", "data": {}}
+    response = client.post("/webhook/", json=payload)
     assert response.status_code == 200
-    assert response.json() == {"received": True}
+    assert response.json() == {"status": "received"}
 
 
 def test_webhook_by_instance_path():
-    response = client.post("/webhook/test", json=messages_upsert_payload())
+    response = client.post("/webhook/clinica", json=messages_upsert_payload())
     assert response.status_code == 200
 
 
 def test_webhook_by_instance_path_mismatch():
-    response = client.post("/webhook/other_instance", json=messages_upsert_payload())
+    response = client.post("/webhook/outra_instancia", json=messages_upsert_payload())
     assert response.status_code == 400
 
 
-def test_missing_event_field_returns_422():
-    response = client.post("/webhook", json={"instance": "test", "data": {}})
-    assert response.status_code == 422
+def test_missing_event_field_returns_200_and_ignores():
+    response = client.post("/webhook/", json={"instance": "clinica", "data": {}})
+    assert response.status_code == 200

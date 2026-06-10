@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 VERIFY_TOKEN = os.getenv("WA_VERIFY_TOKEN", "meu_token_verificacao")
 
+
 @router.get("/")
 async def verify_webhook(
     hub_mode: str = Query(None, alias="hub.mode"),
@@ -20,10 +21,23 @@ async def verify_webhook(
         return int(hub_challenge)
     raise HTTPException(status_code=403, detail="Token de verificação inválido")
 
+
 @router.post("/")
 async def receive_message(request: Request):
-    """Recebe payloads da Evolution API."""
+    """Recebe payloads da Evolution API (global webhook)."""
     payload = await request.json()
     logger.debug(f"Payload recebido: {payload}")
+    await handle_incoming_message(payload)
+    return {"status": "received"}
+
+
+@router.post("/{instance}")
+async def receive_message_by_instance(instance: str, request: Request):
+    """Recebe payloads da Evolution API (per-instance webhook path)."""
+    configured = os.getenv("EVOLUTION_INSTANCE_NAME", "")
+    if configured and instance != configured:
+        raise HTTPException(status_code=400, detail=f"Instância '{instance}' não reconhecida")
+    payload = await request.json()
+    logger.debug(f"Payload recebido (instância={instance}): {payload}")
     await handle_incoming_message(payload)
     return {"status": "received"}
