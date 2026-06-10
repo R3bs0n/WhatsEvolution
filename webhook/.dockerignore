@@ -1,0 +1,11 @@
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+*.egg-info
+staticfiles
+media
+tests/
+django_tests/
+.env

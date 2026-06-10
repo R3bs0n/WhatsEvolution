@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3 gap-2">
+  <a href="{% url 'atendimento-list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="mb-0">{{ title }}</h4>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Situação *</label>
+          {{ form.situacao }}
+          {% for e in form.situacao.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Paciente</label>
+          {{ form.paciente }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Telefone</label>
+          {{ form.telefone }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Idade</label>
+          {{ form.idade }}
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Exame / Procedimento</label>
+          {{ form.exame_procedimento }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Data de Agendamento</label>
+          {{ form.data_agendamento }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Horário</label>
+          {{ form.horario_agendamento }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Profissional Executante</label>
+          {{ form.profissional_executante }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Unidade Executante</label>
+          {{ form.un_executante }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Unidade Solicitante</label>
+          {{ form.un_solicitante }}
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold">Observação</label>
+          {{ form.observacao }}
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-4">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>Salvar
+        </button>
+        <a href="{% url 'atendimento-list' %}" class="btn btn-outline-secondary">Cancelar</a>
+        {% if object %}
+        <a href="{% url 'atendimento-delete' object.pk %}" class="btn btn-outline-danger ms-auto">
+          <i class="bi bi-trash me-1"></i>Excluir
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -75,8 +75,30 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    volumes:
+      - media_data:/app/media
     depends_on:
-      - evolution-api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - evo-network
+
+  celery-worker:
+    build:
+      context: ./webhook
+      dockerfile: Dockerfile
+    container_name: evolution_celery
+    restart: unless-stopped
+    command: celery -A config worker --loglevel=info -Q celery --concurrency=2
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - evo-network
 
@@ -172,6 +194,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  media_data:
   chatwoot_postgres_data:
   chatwoot_redis_data:
   chatwoot_storage:

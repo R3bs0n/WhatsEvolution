@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ object.paciente }} — Detalhe{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3 gap-2">
+  <a href="{% url 'atendimento-list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="mb-0">Atendimento #{{ object.pk }}</h4>
+  <div class="ms-auto d-flex gap-2">
+    <a href="{% url 'atendimento-update' object.pk %}" class="btn btn-sm btn-primary">
+      <i class="bi bi-pencil me-1"></i>Editar
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header small fw-semibold text-muted">Dados do Paciente</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5">Paciente</dt><dd class="col-7">{{ object.paciente|default:"—" }}</dd>
+          <dt class="col-5">Telefone</dt><dd class="col-7">{{ object.telefone|default:"—" }}</dd>
+          <dt class="col-5">Idade</dt><dd class="col-7">{{ object.idade|default:"—" }}</dd>
+          <dt class="col-5">Situação</dt><dd class="col-7">{{ object.situacao }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header small fw-semibold text-muted">Procedimento</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5">Procedimento</dt><dd class="col-7">{{ object.exame_procedimento|default:"—" }}</dd>
+          <dt class="col-5">Data</dt><dd class="col-7">{{ object.data_agendamento|date:"d/m/Y"|default:"—" }}</dd>
+          <dt class="col-5">Horário</dt><dd class="col-7">{{ object.horario_agendamento|default:"—" }}</dd>
+          <dt class="col-5">Profissional</dt><dd class="col-7">{{ object.profissional_executante|default:"—" }}</dd>
+          <dt class="col-5">Un. Exec.</dt><dd class="col-7">{{ object.un_executante|default:"—" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header small fw-semibold text-muted">Status de Envio</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-3">Status</dt>
+          <dd class="col-9">
+            {% if object.status_enviado == "S" %}
+              <span class="badge bg-success">Enviado</span>
+            {% else %}
+              <span class="badge bg-warning text-dark">Pendente</span>
+            {% endif %}
+          </dd>
+          <dt class="col-3">Data envio</dt><dd class="col-9">{{ object.data_envio|date:"d/m/Y H:i"|default:"—" }}</dd>
+          <dt class="col-3">PDF</dt><dd class="col-9">{{ object.pdf_nome_arquivo|default:"—" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if logs %}
+<div class="card mt-3">
+  <div class="card-header small fw-semibold text-muted">Logs de Envio WhatsApp</div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0">
+      <thead class="table-light">
+        <tr><th>Data/Hora</th><th>Telefone</th><th>Status</th><th>Detalhe</th></tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td class="small">{{ log.enviado_em|date:"d/m/Y H:i" }}</td>
+          <td class="small">{{ log.telefone }}</td>
+          <td>
+            {% if log.sucesso %}
+              <span class="badge bg-success">OK</span>
+            {% else %}
+              <span class="badge bg-danger">FALHA</span>
+            {% endif %}
+          </td>
+          <td class="small text-muted">{{ log.status_retorno }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

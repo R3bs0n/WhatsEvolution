@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Saúde Popular{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-speedometer2 me-2 text-success"></i>Dashboard</h4>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-2 fw-bold text-primary">{{ total }}</div>
+      <div class="text-muted small">Total Atendimentos</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-2 fw-bold text-success">{{ enviados }}</div>
+      <div class="text-muted small">Mensagens Enviadas</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-2 fw-bold text-warning">{{ nao_enviados }}</div>
+      <div class="text-muted small">Pendentes</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center p-3">
+      <div class="fs-2 fw-bold text-danger">{{ falhas }}</div>
+      <div class="text-muted small">Falhas de Envio</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card p-3 border-start border-4 border-info">
+      <div class="text-muted small">Importados hoje</div>
+      <div class="fs-3 fw-bold">{{ importados_hoje }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3 border-start border-4 border-success">
+      <div class="text-muted small">Enviados hoje</div>
+      <div class="fs-3 fw-bold">{{ mensagens_hoje }}</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card p-3 border-start border-4 border-primary">
+      <div class="text-muted small">Enviados este mês</div>
+      <div class="fs-3 fw-bold">{{ mensagens_mes }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <a href="{% url 'pdf-upload' %}" class="card p-4 text-decoration-none text-dark d-block text-center">
+      <i class="bi bi-file-earmark-pdf-fill fs-1 text-danger"></i>
+      <div class="mt-2 fw-semibold">Importar PDF</div>
+      <div class="text-muted small">Carregar relação de agendamentos</div>
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{% url 'whatsapp-send' %}" class="card p-4 text-decoration-none text-dark d-block text-center">
+      <i class="bi bi-whatsapp fs-1 text-success"></i>
+      <div class="mt-2 fw-semibold">Disparar Mensagens</div>
+      <div class="text-muted small">Enviar lote para pendentes</div>
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{% url 'atendimento-list' %}" class="card p-4 text-decoration-none text-dark d-block text-center">
+      <i class="bi bi-people-fill fs-1 text-primary"></i>
+      <div class="mt-2 fw-semibold">Atendimentos</div>
+      <div class="text-muted small">Ver e gerenciar registros</div>
+    </a>
+  </div>
+</div>
+{% endblock %}

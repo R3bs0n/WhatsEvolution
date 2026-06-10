@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Importar PDF{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h4 class="mb-0"><i class="bi bi-file-earmark-pdf-fill me-2 text-danger"></i>Importar PDF</h4>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header small fw-semibold text-muted">Carregar Relação de Agendamentos</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            {{ form.arquivo }}
+            {% for error in form.arquivo.errors %}
+              <div class="text-danger small mt-1">{{ error }}</div>
+            {% endfor %}
+            <div class="form-text">Formato suportado: PDF (Relação dos Agendamentos SUS)</div>
+          </div>
+          <button type="submit" class="btn btn-danger w-100">
+            <i class="bi bi-cloud-upload me-2"></i>Importar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header small fw-semibold text-muted">Histórico de Importações</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Arquivo</th>
+              <th>Usuário</th>
+              <th>Inseridos</th>
+              <th>Ignorados</th>
+              <th>Status</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in logs_recentes %}
+            <tr>
+              <td class="small text-truncate" style="max-width:160px">{{ log.filename }}</td>
+              <td class="small">{{ log.user.username|default:"—" }}</td>
+              <td class="small text-success">{{ log.total_inseridos }}</td>
+              <td class="small text-warning">{{ log.total_ignorados }}</td>
+              <td>
+                {% if log.status == "SUCESSO" %}
+                  <span class="badge bg-success">Sucesso</span>
+                {% elif log.status == "PARCIAL" %}
+                  <span class="badge bg-warning text-dark">Parcial</span>
+                {% else %}
+                  <span class="badge bg-danger">Erro</span>
+                {% endif %}
+              </td>
+              <td class="small">{{ log.created_at|date:"d/m H:i" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-3">Nenhuma importação ainda.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
