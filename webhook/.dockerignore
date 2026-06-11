@@ -7,5 +7,4 @@ __pycache__
 staticfiles
 media
 tests/
-django_tests/
 .env

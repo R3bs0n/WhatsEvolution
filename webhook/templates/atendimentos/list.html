@@ -38,12 +38,21 @@
   </div>
 </div>
 
+{# Formulário oculto que recebe os IDs selecionados e o parâmetro force via JS #}
+<form id="dispatch-form" method="post" action="{% url 'atendimento-dispatch' %}">
+  {% csrf_token %}
+  <input type="hidden" name="force" id="dispatch-force" value="pending">
+</form>
+
 <div class="card">
   <div class="card-body p-0">
     <div class="table-responsive">
       <table class="table table-hover table-sm mb-0">
         <thead class="table-light">
           <tr>
+            <th style="width:40px">
+              <input class="form-check-input" type="checkbox" id="select-all" title="Selecionar todos desta página">
+            </th>
             <th>Paciente</th>
             <th>Procedimento</th>
             <th>Telefone</th>
@@ -55,6 +64,12 @@
         <tbody>
           {% for obj in page_obj %}
           <tr>
+            <td>
+              <input class="form-check-input row-check"
+                     type="checkbox"
+                     value="{{ obj.pk }}"
+                     data-status="{{ obj.status_enviado }}">
+            </td>
             <td>{{ obj.paciente|default:"—" }}</td>
             <td class="text-truncate" style="max-width:200px">{{ obj.exame_procedimento|default:"—" }}</td>
             <td>{{ obj.telefone|default:"—" }}</td>
@@ -62,6 +77,8 @@
             <td>
               {% if obj.status_enviado == "S" %}
                 <span class="badge bg-success">Enviado</span>
+              {% elif obj.status_enviado == "E" %}
+                <span class="badge bg-info text-dark">Enfileirado</span>
               {% else %}
                 <span class="badge bg-warning text-dark">Pendente</span>
               {% endif %}
@@ -77,7 +94,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="6" class="text-center text-muted py-4">Nenhum atendimento encontrado.</td>
+            <td colspan="7" class="text-center text-muted py-4">Nenhum atendimento encontrado.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -105,4 +122,147 @@
   </ul>
 </nav>
 {% endif %}
+
+{# Barra de ação flutuante #}
+<div id="action-bar"
+     class="d-none position-fixed bottom-0 start-50 translate-middle-x mb-3"
+     style="z-index:1050; min-width:360px">
+  <div class="card shadow border-0">
+    <div class="card-body py-2 px-3 d-flex align-items-center gap-3">
+      <span id="selected-count" class="text-muted small fw-semibold"></span>
+      <button type="button" id="btn-dispatch" class="btn btn-success btn-sm">
+        <i class="bi bi-send-fill me-1"></i>Disparar selecionados
+      </button>
+      <button type="button" id="btn-clear" class="btn btn-outline-secondary btn-sm">
+        Limpar seleção
+      </button>
+    </div>
+  </div>
+</div>
+
+{# Modal de confirmação para registros já enviados #}
+<div class="modal fade" id="modalReenvio" tabindex="-1" aria-labelledby="modalReenvioLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalReenvioLabel">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Registros já encaminhados
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">Alguns registros selecionados <strong>já foram encaminhados</strong> anteriormente.</p>
+        <p class="text-muted small mb-0">Como deseja prosseguir?</p>
+      </div>
+      <div class="modal-footer flex-column align-items-stretch gap-2">
+        <button type="button" id="btn-send-pending" class="btn btn-warning">
+          <i class="bi bi-send me-1"></i>Enviar apenas os pendentes
+        </button>
+        <button type="button" id="btn-send-all" class="btn btn-danger">
+          <i class="bi bi-send-fill me-1"></i>Enviar todos (incluindo já enviados)
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+(function () {
+  const selectAll   = document.getElementById('select-all');
+  const actionBar   = document.getElementById('action-bar');
+  const countEl     = document.getElementById('selected-count');
+  const btnDispatch = document.getElementById('btn-dispatch');
+  const btnClear    = document.getElementById('btn-clear');
+  const form        = document.getElementById('dispatch-form');
+  const forceInput  = document.getElementById('dispatch-force');
+  let modal = null;
+
+  function getModal() {
+    if (!modal) modal = new bootstrap.Modal(document.getElementById('modalReenvio'));
+    return modal;
+  }
+
+  document.getElementById('btn-send-pending').addEventListener('click', function () {
+    getModal().hide();
+    submitForm('pending');
+  });
+
+  document.getElementById('btn-send-all').addEventListener('click', function () {
+    getModal().hide();
+    submitForm('all');
+  });
+
+  function getChecked() {
+    return Array.from(document.querySelectorAll('.row-check:checked'));
+  }
+
+  function getAll() {
+    return Array.from(document.querySelectorAll('.row-check'));
+  }
+
+  function hasAlreadySent(checked) {
+    return checked.some(cb => cb.dataset.status === 'S');
+  }
+
+  function updateBar() {
+    const checked = getChecked();
+    const all = getAll();
+
+    actionBar.classList.toggle('d-none', checked.length === 0);
+    if (checked.length > 0) {
+      countEl.textContent = checked.length + ' selecionado(s)';
+    }
+
+    selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
+    selectAll.checked = all.length > 0 && checked.length === all.length;
+  }
+
+  function submitForm(force) {
+    const checked = getChecked();
+    if (!checked.length) return;
+
+    form.querySelectorAll('input[name="ids"]').forEach(el => el.remove());
+    checked.forEach(cb => {
+      const input = document.createElement('input');
+      input.type  = 'hidden';
+      input.name  = 'ids';
+      input.value = cb.value;
+      form.appendChild(input);
+    });
+
+    forceInput.value = force;
+    form.submit();
+  }
+
+  btnDispatch.addEventListener('click', function () {
+    const checked = getChecked();
+    if (!checked.length) return;
+
+    if (hasAlreadySent(checked)) {
+      getModal().show();
+    } else {
+      submitForm('pending');
+    }
+  });
+
+  btnClear.addEventListener('click', function () {
+    getAll().forEach(cb => cb.checked = false);
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+    updateBar();
+  });
+
+  selectAll.addEventListener('change', function () {
+    getAll().forEach(cb => cb.checked = this.checked);
+    updateBar();
+  });
+
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.addEventListener('change', updateBar);
+  });
+})();
+});
+</script>
 {% endblock %}

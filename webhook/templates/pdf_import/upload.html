@@ -11,16 +11,38 @@
     <div class="card">
       <div class="card-header small fw-semibold text-muted">Carregar Relação de Agendamentos</div>
       <div class="card-body">
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" id="form-upload">
           {% csrf_token %}
           <div class="mb-3">
-            {{ form.arquivo }}
-            {% for error in form.arquivo.errors %}
-              <div class="text-danger small mt-1">{{ error }}</div>
-            {% endfor %}
-            <div class="form-text">Formato suportado: PDF (Relação dos Agendamentos SUS)</div>
+            <label class="form-label fw-semibold small">Arquivo PDF</label>
+
+            <div class="input-group mb-2">
+              <label class="btn btn-outline-secondary mb-0" for="id_arquivo" style="white-space:nowrap">
+                <i class="bi bi-folder2-open me-1"></i>Selecionar arquivo
+              </label>
+              <span class="form-control text-muted small d-flex align-items-center"
+                    id="nome-arquivo"
+                    onclick="document.getElementById('id_arquivo').click()"
+                    style="cursor:pointer; background:#f8f9fa; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+                Nenhum arquivo selecionado
+              </span>
+            </div>
+
+            <input type="file" name="arquivo" accept=".pdf" id="id_arquivo" class="d-none">
+
+            <div id="file-status">
+              {% if form.arquivo.errors %}
+                <span class="badge bg-danger py-1 px-2">
+                  <i class="bi bi-x-circle-fill me-1"></i>
+                  {% for error in form.arquivo.errors %}{{ error }}{% endfor %}
+                </span>
+              {% endif %}
+            </div>
+
+            <div class="form-text mt-1">Formato suportado: PDF (Relação dos Agendamentos SUS)</div>
           </div>
-          <button type="submit" class="btn btn-danger w-100">
+
+          <button type="submit" class="btn btn-danger w-100" id="btn-importar">
             <i class="bi bi-cloud-upload me-2"></i>Importar
           </button>
         </form>
@@ -70,4 +92,40 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const importedFiles = [{% for f in imported_filenames %}"{{ f|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+
+const fileInput  = document.getElementById('id_arquivo');
+const fileLabel  = document.getElementById('nome-arquivo');
+const fileStatus = document.getElementById('file-status');
+const submitBtn  = document.getElementById('btn-importar');
+const uploadForm = document.getElementById('form-upload');
+
+const STATUS = {
+  ready:    '<span class="badge bg-success py-1 px-2"><i class="bi bi-check-circle-fill me-1"></i>Pronto para importar</span>',
+  duplicate:'<span class="badge bg-warning text-dark py-1 px-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>Já importado anteriormente — pode reimportar</span>',
+  loading:  '<span class="badge bg-primary py-1 px-2"><i class="bi bi-hourglass-split me-1"></i>Carregando PDF...</span>',
+};
+
+fileInput.addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) {
+    fileLabel.textContent = 'Nenhum arquivo selecionado';
+    fileStatus.innerHTML  = '';
+    return;
+  }
+  fileLabel.textContent = file.name;
+  fileStatus.innerHTML  = importedFiles.includes(file.name) ? STATUS.duplicate : STATUS.ready;
+});
+
+uploadForm.addEventListener('submit', function () {
+  if (!fileInput.files.length) return;
+  submitBtn.disabled     = true;
+  submitBtn.innerHTML    = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Importando...';
+  fileStatus.innerHTML   = STATUS.loading;
+});
+</script>
 {% endblock %}

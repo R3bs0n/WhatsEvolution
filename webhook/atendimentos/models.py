@@ -18,7 +18,7 @@ class SituacaoAtendimento(models.Model):
 
 
 class Atendimento(models.Model):
-    STATUS_CHOICES = [("N", "Não enviado"), ("S", "Enviado")]
+    STATUS_CHOICES = [("N", "Não enviado"), ("E", "Enfileirado"), ("S", "Enviado")]
 
     situacao = models.ForeignKey(
         SituacaoAtendimento,
@@ -52,6 +52,10 @@ class Atendimento(models.Model):
         ordering = ["-criado_em"]
         verbose_name = "Atendimento"
         verbose_name_plural = "Atendimentos"
+        indexes = [
+            # Acelera o filtro principal do send_panel e da listagem
+            models.Index(fields=["status_enviado", "-criado_em"], name="idx_atend_status_criado"),
+        ]
 
     def __str__(self):
         return f"{self.paciente} — {self.exame_procedimento}"

@@ -1,13 +1,20 @@
 import csv
+import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import AtendimentoForm
 from .models import Atendimento
+
+logger = logging.getLogger(__name__)
+
+_MSG_DELAY_SECONDS = 3
 
 
 @login_required
@@ -16,15 +23,17 @@ def atendimento_list(request):
 
     q = request.GET.get("q", "").strip()
     if q:
-        qs = qs.filter(paciente__icontains=q) | qs.filter(telefone__icontains=q)
+        # Q objects mantêm o select_related e geram um único WHERE … OR …
+        qs = qs.filter(Q(paciente__icontains=q) | Q(telefone__icontains=q))
     status = request.GET.get("status", "")
-    if status in ("N", "S"):
+    if status in ("N", "E", "S"):
         qs = qs.filter(status_enviado=status)
 
     paginator = Paginator(qs, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
     return render(request, "atendimentos/list.html", {
         "page_obj": page_obj, "q": q, "status": status,
+        "total_count": paginator.count,
     })
 
 
@@ -73,14 +82,60 @@ def atendimento_delete(request, pk):
 
 
 @login_required
+def atendimento_dispatch(request):
+    if request.method != "POST":
+        return redirect("atendimento-list")
+
+    force = request.POST.get("force", "pending")
+    raw_ids = request.POST.getlist("ids")
+    if not raw_ids:
+        messages.warning(request, "Nenhum atendimento selecionado.")
+        return redirect("atendimento-list")
+    try:
+        ids = [int(i) for i in raw_ids]
+    except ValueError:
+        messages.error(request, "Seleção inválida.")
+        return redirect("atendimento-list")
+
+    from whatsapp.tasks import send_whatsapp_for_atendimento
+
+    with transaction.atomic():
+        if force == "all":
+            # Reseta registros já enviados para "N" para que possam ser reenviados
+            Atendimento.objects.filter(pk__in=ids, status_enviado="S").update(status_enviado="N")
+
+        enfileirados = list(
+            Atendimento.objects
+            .select_for_update(skip_locked=True)
+            .filter(pk__in=ids, status_enviado="N")
+            .values_list("pk", flat=True)
+        )
+        if enfileirados:
+            Atendimento.objects.filter(pk__in=enfileirados).update(status_enviado="E")
+
+    if not enfileirados:
+        messages.warning(request, "Nenhum dos selecionados estava pendente para envio.")
+    else:
+        for i, pk in enumerate(enfileirados):
+            send_whatsapp_for_atendimento.apply_async(
+                args=[pk],
+                countdown=i * _MSG_DELAY_SECONDS,
+            )
+        messages.success(request, f"{len(enfileirados)} mensagem(ns) enfileirada(s) para envio.")
+
+    return redirect("atendimento-list")
+
+
+
+@login_required
 def export_csv(request):
     qs = Atendimento.objects.select_related("situacao").order_by("-criado_em")
 
     q = request.GET.get("q", "").strip()
     if q:
-        qs = qs.filter(paciente__icontains=q) | qs.filter(telefone__icontains=q)
+        qs = qs.filter(Q(paciente__icontains=q) | Q(telefone__icontains=q))
     status = request.GET.get("status", "")
-    if status in ("N", "S"):
+    if status in ("N", "E", "S"):
         qs = qs.filter(status_enviado=status)
 
     response = HttpResponse(content_type="text/csv; charset=utf-8-sig")

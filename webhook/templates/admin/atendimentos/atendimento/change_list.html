@@ -1,0 +1,125 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block pagination %}
+  {{ block.super }}
+  {% if cl.paginator.num_pages > 1 %}
+  <div class="paginator" style="margin-top:4px;">
+    <form id="admin-page-jump" method="get"
+          style="display:inline-flex;align-items:center;gap:6px;font-size:13px">
+      {# Preserve all current GET params (filters, search, etc.) #}
+      {% for key, value in request.GET.items %}
+        {% if key != 'p' %}
+          <input type="hidden" name="{{ key }}" value="{{ value }}">
+        {% endif %}
+      {% endfor %}
+      <label for="admin-page-input" style="margin:0">{% trans "Ir para página:" %}</label>
+      <input id="admin-page-input"
+             type="number"
+             name="p"
+             min="1"
+             max="{{ cl.paginator.num_pages }}"
+             placeholder="{{ cl.page_num|add:'1' }}"
+             style="width:70px;padding:2px 6px;border:1px solid #ccc;border-radius:3px">
+      <button type="submit"
+              style="padding:2px 10px;background:#79aec8;color:#fff;border:none;border-radius:3px;cursor:pointer">
+        {% trans "Ir" %}
+      </button>
+    </form>
+  </div>
+  <script>
+  (function () {
+    var form = document.getElementById('admin-page-jump');
+    form.addEventListener('submit', function (e) {
+      var input = document.getElementById('admin-page-input');
+      var max = parseInt(input.max, 10);
+      var val = parseInt(input.value, 10);
+      if (isNaN(val) || val < 1 || val > max) {
+        e.preventDefault();
+        input.style.borderColor = 'red';
+        return;
+      }
+      // Django admin pagination is 0-based in the URL (?p=0 is page 1)
+      input.value = val - 1;
+    });
+  })();
+  </script>
+  {% endif %}
+{% endblock %}
+
+{% block result_list %}
+  {{ block.super }}
+  <script>
+  (function () {
+    // Add a "Selecionar todos (N)" option next to the built-in header checkbox
+    var headerCb = document.getElementById('action-toggle');
+    if (!headerCb) return;
+
+    var totalCount = parseInt('{{ cl.result_count }}', 10);
+    var pageCount  = parseInt('{{ cl.result_list|length }}', 10);
+    if (totalCount <= pageCount) return; // already all on one page
+
+    // Wrapper for both checkboxes
+    var wrapper = document.createElement('span');
+    wrapper.style.cssText = 'display:inline-flex;align-items:center;gap:10px;white-space:nowrap;';
+
+    // Clone the existing header checkbox into the wrapper
+    var parent = headerCb.parentNode;
+    parent.insertBefore(wrapper, headerCb);
+    wrapper.appendChild(headerCb);
+
+    // Add separator and second checkbox
+    var sep = document.createElement('span');
+    sep.style.cssText = 'border-left:1px solid #ccc;height:14px;';
+    wrapper.appendChild(sep);
+
+    var cbAll = document.createElement('input');
+    cbAll.type = 'checkbox';
+    cbAll.id = 'action-toggle-all';
+    cbAll.style.marginRight = '3px';
+
+    var lbl = document.createElement('label');
+    lbl.htmlFor = 'action-toggle-all';
+    lbl.style.cssText = 'font-weight:bold;cursor:pointer;margin:0;font-size:13px;white-space:nowrap;';
+    lbl.textContent = 'Todos (' + totalCount + ')';
+
+    wrapper.appendChild(cbAll);
+    wrapper.appendChild(lbl);
+
+    // When "Todos" is checked, trigger Django's built-in select-across
+    cbAll.addEventListener('change', function () {
+      if (this.checked) {
+        // First check the header checkbox to select all on current page
+        if (!headerCb.checked) {
+          headerCb.click();
+        }
+        // Then click the "select all N items" Django banner link (if present)
+        var bannerLink = document.querySelector('#changelist-form .action-counter a');
+        if (bannerLink) {
+          bannerLink.click();
+        } else {
+          // Banner not yet rendered — wait a tick and retry
+          setTimeout(function () {
+            var link = document.querySelector('#changelist-form .action-counter a');
+            if (link) link.click();
+          }, 100);
+        }
+      } else {
+        // Uncheck all
+        if (headerCb.checked) headerCb.click();
+        var selectAcrossInput = document.querySelector('input[name="select_across"]');
+        if (selectAcrossInput) selectAcrossInput.value = '0';
+      }
+    });
+
+    // If the user unchecks the page checkbox, also uncheck "Todos"
+    headerCb.addEventListener('change', function () {
+      if (!this.checked) {
+        cbAll.checked = false;
+        var selectAcrossInput = document.querySelector('input[name="select_across"]');
+        if (selectAcrossInput) selectAcrossInput.value = '0';
+      }
+    });
+  })();
+  </script>
+{% endblock %}

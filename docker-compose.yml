@@ -1,6 +1,9 @@
 services:
   evolution-api:
-    image: atendai/evolution-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.evolution
+    image: evolution-api-custom:latest
     container_name: evolution_api
     restart: unless-stopped
     ports:
@@ -25,6 +28,7 @@ services:
       - CHATWOOT_BOT_CONTACT=${CHATWOOT_BOT_CONTACT}
       - CHATWOOT_IMPORT_DATABASE_CONNECTION_URI=${CHATWOOT_IMPORT_DATABASE_CONNECTION_URI}
       - CHATWOOT_IMPORT_PLACEHOLDER_MEDIA_MESSAGE=${CHATWOOT_IMPORT_PLACEHOLDER_MEDIA_MESSAGE}
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821
     depends_on:
       postgres:
         condition: service_healthy

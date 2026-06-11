@@ -1,0 +1,15 @@
+FROM atendai/evolution-api:latest
+
+# Install git (required by some npm packages with git dependencies)
+RUN apk add --no-cache git
+
+WORKDIR /evolution
+
+# Upgrade Baileys from 6.7.12 → 6.7.23 (same major, fixes WhatsApp protocol compat)
+RUN npm install @whiskeysockets/baileys@6.7.23 --legacy-peer-deps --no-audit --no-fund 2>&1
+
+# Patch bundled WA version — without this Evolution API uses 2,3000,1015901307
+# which triggers WhatsApp 405 Connection Failure. Uses known-good latest version.
+RUN echo '{"version":[2,3000,1035194821]}' \
+    > /evolution/node_modules/@whiskeysockets/baileys/lib/Defaults/baileys-version.json \
+    && echo "Patched baileys-version.json to [2,3000,1035194821]"

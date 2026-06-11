@@ -148,6 +148,9 @@ EVOLUTION_INSTANCE_NAME = env.str("EVOLUTION_INSTANCE_NAME", default="clinica")
 
 DEFAULT_COUNTRY_CODE = env.str("DEFAULT_COUNTRY_CODE", default="55")
 WHATSAPP_PROVIDER = env.str("WHATSAPP_PROVIDER", default="evolution")
+WHATSAPP_CONTACT_URL = env.str("WHATSAPP_CONTACT_URL", default="https://wa.me/5548988762025")
+# Se vazio, message_builder usa o template padrão embutido
+WHATSAPP_MESSAGE_TEMPLATE = env.str("WHATSAPP_MESSAGE_TEMPLATE", default="") or ""
 
 LOGGING = {
     "version": 1,

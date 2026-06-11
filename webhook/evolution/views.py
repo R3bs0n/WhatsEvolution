@@ -27,21 +27,24 @@ def webhook_receiver(request, instance=None):
 
     logger.info("Evento recebido: %s  instância: %s", event_type, inst)
 
-    if event_type == "QRCODE_UPDATED":
+    # Evolution API v2 sends events as "qrcode.updated" or "QRCODE_UPDATED" depending on config
+    event_normalized = event_type.upper().replace(".", "_") if event_type else ""
+
+    if event_normalized == "QRCODE_UPDATED":
         if isinstance(data, dict):
             base64_img = (data.get("qrcode") or {}).get("base64", "")
             if base64_img:
                 cache.set(f"{_QR_PREFIX}{inst}", base64_img, timeout=_QR_TTL)
                 logger.info("QR Code armazenado para '%s'", inst)
 
-    elif event_type == "CONNECTION_UPDATE":
+    elif event_normalized == "CONNECTION_UPDATE":
         if isinstance(data, dict):
             state = data.get("state", "")
             logger.info("Conexão '%s': %s", inst, state)
             if state == "open":
                 cache.delete(f"{_QR_PREFIX}{inst}")
 
-    elif event_type == "MESSAGES_UPSERT":
+    elif event_normalized == "MESSAGES_UPSERT":
         msgs = data if isinstance(data, list) else [data]
         for msg in msgs:
             key = msg.get("key", {})
