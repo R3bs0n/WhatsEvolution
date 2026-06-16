@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Instâncias WhatsApp — Saúde Popular{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-phone-fill me-2 text-success"></i>Instâncias WhatsApp</h4>
+  <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#novaInstanciaModal">
+    <i class="bi bi-plus-lg me-1"></i>Nova instância
+  </button>
+</div>
+
+<div class="row g-3">
+  {% for inst in instances %}
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="card p-3 h-100">
+      <div class="d-flex align-items-center gap-3 mb-2">
+        {% if inst.profilePicUrl %}
+          <img src="{{ inst.profilePicUrl }}" class="rounded-circle" style="width:48px;height:48px;object-fit:cover">
+        {% else %}
+          <div class="rounded-circle bg-secondary-subtle d-flex align-items-center justify-content-center" style="width:48px;height:48px">
+            <i class="bi bi-whatsapp fs-4 text-secondary"></i>
+          </div>
+        {% endif %}
+        <div>
+          <div class="fw-semibold">{{ inst.name }}</div>
+          <span class="badge
+            {% if inst.connectionStatus == 'open' %}bg-success
+            {% elif inst.connectionStatus == 'connecting' %}bg-warning text-dark
+            {% else %}bg-danger{% endif %}">
+            {{ inst.connectionStatus|default:"close" }}
+          </span>
+        </div>
+      </div>
+      {% if inst.profileName %}
+        <div class="text-muted small mb-1"><i class="bi bi-person me-1"></i>{{ inst.profileName }}</div>
+      {% endif %}
+      {% if inst.ownerJid %}
+        <div class="text-muted small mb-2"><i class="bi bi-telephone me-1"></i>{{ inst.ownerJid }}</div>
+      {% endif %}
+
+      <div class="d-flex gap-2 mt-auto">
+        {% if inst.connectionStatus != 'open' %}
+          <a href="{% url 'instance-connect' inst.name %}" class="btn btn-outline-success btn-sm flex-fill">
+            <i class="bi bi-qr-code me-1"></i>Conectar
+          </a>
+        {% endif %}
+        <form method="post" action="{% url 'instance-delete' inst.name %}" class="m-0"
+              onsubmit="return confirm('Excluir a instância {{ inst.name }}? Esta ação não pode ser desfeita.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="card p-4 text-center text-muted">
+      Nenhuma instância encontrada na Evolution API.
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="modal fade" id="novaInstanciaModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="{% url 'instance-create' %}" class="modal-content">
+      {% csrf_token %}
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-lg me-2"></i>Nova instância</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Nome da instância</label>
+          <input type="text" name="instance_name" class="form-control" required
+                 pattern="[a-zA-Z0-9_-]{1,50}" maxlength="50"
+                 placeholder="ex: clinica_unidade2">
+          <div class="form-text">Apenas letras, números, hífen ou underline.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Tipo de integração</label>
+          <select name="integration" id="integrationSelect" class="form-select" onchange="toggleMetaFields()">
+            <option value="WHATSAPP-BAILEYS" selected>WhatsApp (QR Code) — Baileys</option>
+            <option value="WHATSAPP-BUSINESS">WhatsApp Business API — Meta (Cloud API oficial)</option>
+          </select>
+        </div>
+
+        <div id="metaFields" class="d-none">
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Número do WhatsApp Business</label>
+            <input type="text" name="number" class="form-control" placeholder="ex: 5511999999999">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Token de acesso (Meta)</label>
+            <input type="password" name="token" class="form-control" autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Business ID <span class="text-muted">(opcional)</span></label>
+            <input type="text" name="business_id" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success">Criar instância</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function toggleMetaFields() {
+  const isMeta = document.getElementById('integrationSelect').value === 'WHATSAPP-BUSINESS';
+  const metaFields = document.getElementById('metaFields');
+  metaFields.classList.toggle('d-none', !isMeta);
+  metaFields.querySelectorAll('input[name="number"], input[name="token"]').forEach(el => el.required = isMeta);
+}
+</script>
+{% endblock %}

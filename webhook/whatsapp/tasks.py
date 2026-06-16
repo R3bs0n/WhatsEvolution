@@ -94,6 +94,14 @@ def send_whatsapp_for_atendimento(self, atendimento_id: int) -> bool:
             service = WhatsAppSendService()
             success = service.send_for_atendimento(atendimento)
 
+            if not success:
+                # Reverte para "N" para permitir reenvio manual pelo operador.
+                # Casos como BLOQUEADO e TELEFONE_INVALIDO também voltam para "N"
+                # — o operador vê o motivo no log e decide o que fazer.
+                Atendimento.objects.filter(
+                    pk=atendimento_id, status_enviado="E"
+                ).update(status_enviado="N")
+
         logger.info("Atendimento %s — %s", atendimento_id, "OK" if success else "FALHA")
         return success
 

@@ -71,6 +71,10 @@
       </a>
       {% if user.is_staff %}
       <div class="nav-section mt-2">Admin</div>
+      <a class="nav-link {% if request.resolver_match.url_name == 'instance-list' %}active{% endif %}"
+         href="{% url 'instance-list' %}">
+        <i class="bi bi-phone-fill me-2"></i>Instâncias WhatsApp
+      </a>
       <a class="nav-link" href="{% url 'admin:index' %}">
         <i class="bi bi-gear-fill me-2"></i>Painel Admin
       </a>

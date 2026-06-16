@@ -3,6 +3,8 @@ import logging
 import httpx
 from django.conf import settings
 
+from core.services.phone import mask_phone
+
 from .providers import WhatsAppProvider, WhatsAppSendResult
 
 logger = logging.getLogger(__name__)
@@ -20,12 +22,12 @@ class EvolutionWhatsAppProvider(WhatsAppProvider):
             with httpx.Client(timeout=15.0) as client:
                 response = client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
-            logger.info("Mensagem enviada para %s", phone)
+            logger.info("Mensagem enviada para %s", mask_phone(phone))
             return WhatsAppSendResult(success=True, status="SENT", code="200")
         except httpx.HTTPStatusError as exc:
             code = str(exc.response.status_code)
             detail = exc.response.text[:200]
-            logger.error("HTTP %s ao enviar para %s: %s", code, phone, detail)
+            logger.error("HTTP %s ao enviar para %s: %s", code, mask_phone(phone), detail)
             return WhatsAppSendResult(
                 success=False,
                 status="HTTP_ERROR",
@@ -33,7 +35,7 @@ class EvolutionWhatsAppProvider(WhatsAppProvider):
                 detail=detail,
             )
         except Exception as exc:
-            logger.error("Erro ao enviar para %s: %s", phone, exc)
+            logger.error("Erro ao enviar para %s: %s", mask_phone(phone), exc)
             return WhatsAppSendResult(
                 success=False,
                 status="ERROR",

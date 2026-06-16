@@ -33,7 +33,7 @@ def atendimento_list(request):
 
     tipo = request.GET.get("tipo", "").strip()
     if tipo:
-        qs = qs.filter(tp_procedimento__icontains=tipo)
+        qs = qs.filter(exame_procedimento__icontains=tipo)
 
     status_clinico = request.GET.get("status_clinico", "").strip()
     if status_clinico:
@@ -44,10 +44,10 @@ def atendimento_list(request):
 
     tipos_exame = (
         Atendimento.objects
-        .exclude(tp_procedimento="")
-        .values_list("tp_procedimento", flat=True)
+        .exclude(exame_procedimento="")
+        .values_list("exame_procedimento", flat=True)
         .distinct()
-        .order_by("tp_procedimento")
+        .order_by("exame_procedimento")
     )
 
     status_options = StatusAtendimento.objects.all()

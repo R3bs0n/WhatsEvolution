@@ -69,8 +69,6 @@ class Atendimento(models.Model):
     data_extracao = models.DateTimeField(null=True, blank=True)
     data_envio = models.DateTimeField(null=True, blank=True)
     pdf_nome_arquivo = models.CharField(max_length=255, blank=True)
-    pdf_caminho_arquivo = models.CharField(max_length=500, blank=True)
-    texto_extraido = models.TextField(blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 

@@ -3,7 +3,7 @@ import logging
 from django.conf import settings
 from django.utils import timezone
 
-from core.services.phone import PhoneValidationError, normalize_phone
+from core.services.phone import PhoneValidationError, mask_phone, normalize_phone
 from whatsapp.models import EnvioWhatsAppLog
 from whatsapp.services.message_builder import build_message
 from whatsapp.services.provider_factory import get_provider
@@ -40,7 +40,11 @@ class WhatsAppSendService:
                 detalhe_retorno="Número na lista de opt-out.",
                 sucesso=False,
             )
-            logger.info("Envio ignorado — número bloqueado (atendimento %s): %s", atendimento.pk, phone)
+            logger.info(
+                "Envio ignorado — número bloqueado (atendimento %s): %s",
+                atendimento.pk,
+                mask_phone(phone),
+            )
             return False
 
         mensagem = build_message(atendimento.paciente, atendimento.exame_procedimento)

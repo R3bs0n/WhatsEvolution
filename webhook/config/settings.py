@@ -36,7 +36,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "core",
-    "accounts",
     "atendimentos",
     "pdf_import",
     "whatsapp",
@@ -151,6 +150,8 @@ WHATSAPP_PROVIDER = env.str("WHATSAPP_PROVIDER", default="evolution")
 WHATSAPP_CONTACT_URL = env.str("WHATSAPP_CONTACT_URL", default="https://wa.me/5548988762025")
 # Se vazio, message_builder usa o template padrão embutido
 WHATSAPP_MESSAGE_TEMPLATE = env.str("WHATSAPP_MESSAGE_TEMPLATE", default="") or ""
+# Link da política de privacidade do controlador; se vazio, a linha é omitida da mensagem
+WHATSAPP_PRIVACY_POLICY_URL = env.str("WHATSAPP_PRIVACY_POLICY_URL", default="")
 
 LOGGING = {
     "version": 1,

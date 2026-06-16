@@ -6,7 +6,13 @@ from django.urls import include, path
 
 from core.forms import BootstrapAuthenticationForm
 from core.views import dashboard
-from evolution.views import qr_display
+from evolution.views import (
+    instance_connect,
+    instance_create,
+    instance_delete,
+    instance_list,
+    qr_display,
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -19,7 +25,6 @@ urlpatterns = [
         name="login",
     ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
-    path("accounts/", include("accounts.urls")),
     path("", dashboard, name="dashboard"),
     path("atendimentos/", include("atendimentos.urls")),
     path("pdf/", include("pdf_import.urls")),
@@ -27,6 +32,10 @@ urlpatterns = [
     path("api/", include("core.api_urls")),
     path("webhook/", include("evolution.urls")),
     path("qr/<str:instance>/", qr_display, name="evolution-qr"),
+    path("instancias/", instance_list, name="instance-list"),
+    path("instancias/nova/", instance_create, name="instance-create"),
+    path("instancias/<str:instance>/conectar/", instance_connect, name="instance-connect"),
+    path("instancias/<str:instance>/excluir/", instance_delete, name="instance-delete"),
 ]
 
 if settings.DEBUG:

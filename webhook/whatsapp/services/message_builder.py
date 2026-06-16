@@ -15,8 +15,14 @@ def build_message(nome_paciente: str, tipo_exame: str) -> str:
     template = getattr(settings, "WHATSAPP_MESSAGE_TEMPLATE", "") or _DEFAULT_TEMPLATE
     contato_url = getattr(settings, "WHATSAPP_CONTACT_URL", "") or "https://wa.me/5548988762025"
 
-    return template.format(
+    mensagem = template.format(
         nome_paciente=nome_paciente or "Paciente",
         tipo_exame=tipo_exame or "procedimento",
         contato_url=contato_url,
     )
+
+    privacy_url = getattr(settings, "WHATSAPP_PRIVACY_POLICY_URL", "")
+    if privacy_url:
+        mensagem += f"\n\nPolítica de Privacidade: {privacy_url}"
+
+    return mensagem

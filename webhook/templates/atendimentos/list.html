@@ -21,6 +21,20 @@
   .bg-status-feito     { background-color: #bfdbfe; color: #1e3a5f; }
 
   .obs-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .searchable-select { position: relative; }
+  .searchable-select .ss-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1055;
+    width: 100%;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .searchable-select .ss-menu.show { display: block; }
+  .searchable-select .ss-option.d-none { display: none !important; }
 </style>
 {% endblock %}
 
@@ -45,30 +59,41 @@
                placeholder="Buscar por paciente ou telefone...">
       </div>
       <div class="col-md-2">
-        <select name="tipo" class="form-select form-select-sm">
-          <option value="">Todos os tipos de exame</option>
+        <input type="text" name="tipo" value="{{ tipo }}" list="tipos-exame-list"
+               class="form-control form-control-sm" placeholder="Tipo de exame..." autocomplete="off">
+        <datalist id="tipos-exame-list">
           {% for t in tipos_exame %}
-          <option value="{{ t }}" {% if tipo == t %}selected{% endif %}>{{ t }}</option>
+          <option value="{{ t }}"></option>
           {% endfor %}
-        </select>
+        </datalist>
       </div>
       <div class="col-md-2">
-        <select name="status" class="form-select form-select-sm">
-          <option value="">Status de envio</option>
-          <option value="N" {% if status == "N" %}selected{% endif %}>Não enviado</option>
-          <option value="E" {% if status == "E" %}selected{% endif %}>Enfileirado</option>
-          <option value="S" {% if status == "S" %}selected{% endif %}>Enviado</option>
-          <option value="L" {% if status == "L" %}selected{% endif %}>Limitado</option>
-        </select>
+        <div class="searchable-select" data-name="status">
+          <input type="text" class="form-control form-control-sm ss-input"
+                 placeholder="Status de envio" autocomplete="off">
+          <input type="hidden" name="status" class="ss-value" value="{{ status }}">
+          <div class="ss-menu dropdown-menu">
+            <button type="button" class="dropdown-item ss-option" data-value="">Todos</button>
+            <button type="button" class="dropdown-item ss-option" data-value="N">Não enviado</button>
+            <button type="button" class="dropdown-item ss-option" data-value="E">Enfileirado</button>
+            <button type="button" class="dropdown-item ss-option" data-value="S">Enviado</button>
+            <button type="button" class="dropdown-item ss-option" data-value="L">Limitado</button>
+          </div>
+        </div>
       </div>
       <div class="col-md-2">
-        <select name="status_clinico" class="form-select form-select-sm">
-          <option value="">Status clínico</option>
-          <option value="sem_status" {% if status_clinico == "sem_status" %}selected{% endif %}>— Sem status</option>
-          {% for s in status_options %}
-          <option value="{{ s.pk }}" {% if status_clinico == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.nome }}</option>
-          {% endfor %}
-        </select>
+        <div class="searchable-select" data-name="status_clinico">
+          <input type="text" class="form-control form-control-sm ss-input"
+                 placeholder="Status clínico" autocomplete="off">
+          <input type="hidden" name="status_clinico" class="ss-value" value="{{ status_clinico }}">
+          <div class="ss-menu dropdown-menu">
+            <button type="button" class="dropdown-item ss-option" data-value="">Todos</button>
+            <button type="button" class="dropdown-item ss-option" data-value="sem_status">— Sem status</button>
+            {% for s in status_options %}
+            <button type="button" class="dropdown-item ss-option" data-value="{{ s.pk }}">{{ s.nome }}</button>
+            {% endfor %}
+          </div>
+        </div>
       </div>
       <div class="col-md-3 d-flex gap-2">
         <button type="submit" class="btn btn-sm btn-primary flex-fill">
@@ -191,8 +216,14 @@
         <a class="page-link" href="?q={{ q }}&status={{ status }}&tipo={{ tipo }}&status_clinico={{ status_clinico }}&page={{ page_obj.previous_page_number }}">‹</a>
       </li>
     {% endif %}
-    <li class="page-item disabled">
-      <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    <li class="page-item">
+      <div class="page-link d-flex align-items-center gap-1 py-1 bg-white">
+        <input type="number" id="goto-page" min="1" max="{{ page_obj.paginator.num_pages }}"
+               value="{{ page_obj.number }}"
+               class="form-control form-control-sm text-center p-0 border-0"
+               style="width:48px; height:22px;">
+        <span class="text-muted">/ {{ page_obj.paginator.num_pages }}</span>
+      </div>
     </li>
     {% if page_obj.has_next %}
       <li class="page-item">
@@ -366,6 +397,64 @@ document.addEventListener('DOMContentLoaded', function () {
       .catch(() => {});
     });
   });
+})();
+
+(function () {
+  // Filtros com busca (combobox: digite para procurar status / status clínico)
+  document.querySelectorAll('.searchable-select').forEach(function (wrap) {
+    const input   = wrap.querySelector('.ss-input');
+    const hidden  = wrap.querySelector('.ss-value');
+    const menu    = wrap.querySelector('.ss-menu');
+    const options = Array.from(wrap.querySelectorAll('.ss-option'));
+
+    function syncLabel() {
+      if (!hidden.value) { input.value = ''; return; }
+      const selected = options.find(o => o.dataset.value === hidden.value);
+      input.value = selected ? selected.textContent.trim() : '';
+    }
+
+    function filterOptions() {
+      const term = input.value.trim().toLowerCase();
+      options.forEach(function (opt) {
+        opt.classList.toggle('d-none', !opt.textContent.toLowerCase().includes(term));
+      });
+    }
+
+    function openMenu()  { filterOptions(); menu.classList.add('show'); }
+    function closeMenu() { menu.classList.remove('show'); }
+
+    input.addEventListener('focus', openMenu);
+    input.addEventListener('input', openMenu);
+    input.addEventListener('blur', function () {
+      setTimeout(function () { closeMenu(); syncLabel(); }, 150);
+    });
+
+    options.forEach(function (opt) {
+      opt.addEventListener('click', function () {
+        hidden.value = opt.dataset.value;
+        syncLabel();
+        closeMenu();
+      });
+    });
+
+    syncLabel();
+  });
+
+  // Ir para uma página específica (mesma ideia do paginador do admin do Django)
+  const gotoInput = document.getElementById('goto-page');
+  if (gotoInput) {
+    gotoInput.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      let page = parseInt(gotoInput.value, 10);
+      const max = parseInt(gotoInput.max, 10) || 1;
+      if (isNaN(page) || page < 1) page = 1;
+      if (page > max) page = max;
+      const params = new URLSearchParams(window.location.search);
+      params.set('page', page);
+      window.location.search = params.toString();
+    });
+  }
 })();
 });
 </script>
