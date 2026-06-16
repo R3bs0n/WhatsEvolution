@@ -33,6 +33,7 @@
             <th>Paciente</th>
             <th>Telefone</th>
             <th>Status</th>
+            <th>Cód. Retorno</th>
             <th>Detalhe</th>
           </tr>
         </thead>
@@ -45,15 +46,28 @@
             <td>
               {% if log.sucesso %}
                 <span class="badge bg-success">Enviado</span>
+              {% elif log.status_retorno == "BLOQUEADO" %}
+                <span class="badge bg-secondary">Bloqueado</span>
               {% else %}
                 <span class="badge bg-danger">Falha</span>
+              {% endif %}
+            </td>
+            <td class="small">
+              {% if log.codigo_retorno %}
+                {% if log.sucesso %}
+                  <span class="badge bg-success bg-opacity-75">{{ log.codigo_retorno }}</span>
+                {% else %}
+                  <span class="badge bg-danger bg-opacity-75">{{ log.codigo_retorno }}</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
               {% endif %}
             </td>
             <td class="small text-muted">{{ log.status_retorno }}{% if log.detalhe_retorno %} — {{ log.detalhe_retorno|truncatechars:60 }}{% endif %}</td>
           </tr>
           {% empty %}
           <tr>
-            <td colspan="5" class="text-center text-muted py-4">Nenhum log de envio encontrado.</td>
+            <td colspan="6" class="text-center text-muted py-4">Nenhum log de envio encontrado.</td>
           </tr>
           {% endfor %}
         </tbody>

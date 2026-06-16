@@ -1,11 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Atendimentos{% endblock %}
 
+{% block extra_css %}
+<style>
+  .table-atendimentos thead th {
+    background: #e2e8f0;
+    border-bottom: 2px solid #94a3b8;
+    color: #1e293b;
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .table-atendimentos tbody tr:nth-child(odd)  { background: #f8fafc; }
+  .table-atendimentos tbody tr:nth-child(even) { background: #f1f5f9; }
+  .table-atendimentos tbody tr:hover           { background: #e0f2fe !important; }
+  .table-atendimentos td, .table-atendimentos th { border-color: #cbd5e1; }
+
+  .bg-status-a-atender { background-color: #fef08a; color: #713f12; }
+  .bg-status-atendido  { background-color: #bbf7d0; color: #14532d; }
+  .bg-status-feito     { background-color: #bfdbfe; color: #1e3a5f; }
+
+  .obs-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0"><i class="bi bi-people-fill me-2 text-primary"></i>Atendimentos</h4>
   <div class="d-flex gap-2">
-    <a href="{% url 'atendimento-export-csv' %}?q={{ q }}&status={{ status }}" class="btn btn-outline-secondary btn-sm">
+    <a href="{% url 'atendimento-export-csv' %}?q={{ q }}&status={{ status }}&tipo={{ tipo }}&status_clinico={{ status_clinico }}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-download me-1"></i>CSV
     </a>
     <a href="{% url 'atendimento-create' %}" class="btn btn-primary btn-sm">
@@ -17,15 +40,34 @@
 <div class="card mb-3">
   <div class="card-body py-2">
     <form method="get" class="row g-2 align-items-center">
-      <div class="col-md-6">
+      <div class="col-md-3">
         <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
                placeholder="Buscar por paciente ou telefone...">
       </div>
-      <div class="col-md-3">
+      <div class="col-md-2">
+        <select name="tipo" class="form-select form-select-sm">
+          <option value="">Todos os tipos de exame</option>
+          {% for t in tipos_exame %}
+          <option value="{{ t }}" {% if tipo == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
         <select name="status" class="form-select form-select-sm">
-          <option value="">Todos os status</option>
+          <option value="">Status de envio</option>
           <option value="N" {% if status == "N" %}selected{% endif %}>Não enviado</option>
+          <option value="E" {% if status == "E" %}selected{% endif %}>Enfileirado</option>
           <option value="S" {% if status == "S" %}selected{% endif %}>Enviado</option>
+          <option value="L" {% if status == "L" %}selected{% endif %}>Limitado</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="status_clinico" class="form-select form-select-sm">
+          <option value="">Status clínico</option>
+          <option value="sem_status" {% if status_clinico == "sem_status" %}selected{% endif %}>— Sem status</option>
+          {% for s in status_options %}
+          <option value="{{ s.pk }}" {% if status_clinico == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.nome }}</option>
+          {% endfor %}
         </select>
       </div>
       <div class="col-md-3 d-flex gap-2">
@@ -47,8 +89,8 @@
 <div class="card">
   <div class="card-body p-0">
     <div class="table-responsive">
-      <table class="table table-hover table-sm mb-0">
-        <thead class="table-light">
+      <table class="table table-sm mb-0 table-atendimentos">
+        <thead>
           <tr>
             <th style="width:40px">
               <input class="form-check-input" type="checkbox" id="select-all" title="Selecionar todos desta página">
@@ -56,8 +98,9 @@
             <th>Paciente</th>
             <th>Procedimento</th>
             <th>Telefone</th>
-            <th>Data</th>
-            <th>Status</th>
+            <th>Status Clínico</th>
+            <th>Envio</th>
+            <th>Observação</th>
             <th>Ações</th>
           </tr>
         </thead>
@@ -70,18 +113,55 @@
                      value="{{ obj.pk }}"
                      data-status="{{ obj.status_enviado }}">
             </td>
-            <td>{{ obj.paciente|default:"—" }}</td>
-            <td class="text-truncate" style="max-width:200px">{{ obj.exame_procedimento|default:"—" }}</td>
-            <td>{{ obj.telefone|default:"—" }}</td>
-            <td>{{ obj.data_agendamento|date:"d/m/Y"|default:"—" }}</td>
+            <td class="small fw-semibold">{{ obj.paciente|default:"—" }}</td>
+            <td class="small text-truncate" style="max-width:180px">{{ obj.exame_procedimento|default:"—" }}</td>
+            <td class="small">{{ obj.telefone|default:"—" }}</td>
+            <td>
+              {# Dropdown inline de status clínico #}
+              <div class="dropdown">
+                <button class="btn btn-sm border-0 py-0 px-1 dropdown-toggle status-btn
+                  {% if obj.status_atendimento %}
+                    {% if obj.status_atendimento.nome == 'Atendido' %}btn-outline-success
+                    {% elif obj.status_atendimento.nome == 'A atender' %}btn-outline-warning
+                    {% else %}btn-outline-primary{% endif %}
+                  {% else %}btn-outline-secondary{% endif %}"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  data-pk="{{ obj.pk }}"
+                  title="Alterar status clínico">
+                  <span class="status-label">{{ obj.status_atendimento|default:"— definir" }}</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-sm shadow-sm">
+                  <li>
+                    <button class="dropdown-item small update-status" type="button"
+                            data-pk="{{ obj.pk }}" data-status-id="">
+                      — Sem status
+                    </button>
+                  </li>
+                  {% for s in status_options %}
+                  <li>
+                    <button class="dropdown-item small update-status" type="button"
+                            data-pk="{{ obj.pk }}" data-status-id="{{ s.pk }}">
+                      {{ s.nome }}
+                    </button>
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </td>
             <td>
               {% if obj.status_enviado == "S" %}
                 <span class="badge bg-success">Enviado</span>
               {% elif obj.status_enviado == "E" %}
                 <span class="badge bg-info text-dark">Enfileirado</span>
+              {% elif obj.status_enviado == "L" %}
+                <span class="badge" style="background:#7c3aed;color:#fff" title="Parado pelo limite diário — pode ser reenviado amanhã">Limitado</span>
               {% else %}
                 <span class="badge bg-warning text-dark">Pendente</span>
               {% endif %}
+            </td>
+            <td class="small text-muted obs-cell" title="{{ obj.observacao }}">
+              {{ obj.observacao|default:"—" }}
             </td>
             <td>
               <a href="{% url 'atendimento-detail' obj.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2">
@@ -94,7 +174,7 @@
           </tr>
           {% empty %}
           <tr>
-            <td colspan="7" class="text-center text-muted py-4">Nenhum atendimento encontrado.</td>
+            <td colspan="8" class="text-center text-muted py-4">Nenhum atendimento encontrado.</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -108,7 +188,7 @@
   <ul class="pagination pagination-sm justify-content-center">
     {% if page_obj.has_previous %}
       <li class="page-item">
-        <a class="page-link" href="?q={{ q }}&status={{ status }}&page={{ page_obj.previous_page_number }}">‹</a>
+        <a class="page-link" href="?q={{ q }}&status={{ status }}&tipo={{ tipo }}&status_clinico={{ status_clinico }}&page={{ page_obj.previous_page_number }}">‹</a>
       </li>
     {% endif %}
     <li class="page-item disabled">
@@ -116,7 +196,7 @@
     </li>
     {% if page_obj.has_next %}
       <li class="page-item">
-        <a class="page-link" href="?q={{ q }}&status={{ status }}&page={{ page_obj.next_page_number }}">›</a>
+        <a class="page-link" href="?q={{ q }}&status={{ status }}&tipo={{ tipo }}&status_clinico={{ status_clinico }}&page={{ page_obj.next_page_number }}">›</a>
       </li>
     {% endif %}
   </ul>
@@ -177,6 +257,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const btnClear    = document.getElementById('btn-clear');
   const form        = document.getElementById('dispatch-form');
   const forceInput  = document.getElementById('dispatch-force');
+  const csrfToken   = form.querySelector('[name=csrfmiddlewaretoken]').value;
   let modal = null;
 
   function getModal() {
@@ -209,12 +290,10 @@ document.addEventListener('DOMContentLoaded', function () {
   function updateBar() {
     const checked = getChecked();
     const all = getAll();
-
     actionBar.classList.toggle('d-none', checked.length === 0);
     if (checked.length > 0) {
       countEl.textContent = checked.length + ' selecionado(s)';
     }
-
     selectAll.indeterminate = checked.length > 0 && checked.length < all.length;
     selectAll.checked = all.length > 0 && checked.length === all.length;
   }
@@ -222,7 +301,6 @@ document.addEventListener('DOMContentLoaded', function () {
   function submitForm(force) {
     const checked = getChecked();
     if (!checked.length) return;
-
     form.querySelectorAll('input[name="ids"]').forEach(el => el.remove());
     checked.forEach(cb => {
       const input = document.createElement('input');
@@ -231,7 +309,6 @@ document.addEventListener('DOMContentLoaded', function () {
       input.value = cb.value;
       form.appendChild(input);
     });
-
     forceInput.value = force;
     form.submit();
   }
@@ -239,7 +316,6 @@ document.addEventListener('DOMContentLoaded', function () {
   btnDispatch.addEventListener('click', function () {
     const checked = getChecked();
     if (!checked.length) return;
-
     if (hasAlreadySent(checked)) {
       getModal().show();
     } else {
@@ -261,6 +337,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.querySelectorAll('.row-check').forEach(cb => {
     cb.addEventListener('change', updateBar);
+  });
+
+  // ── Status clínico inline (AJAX) ──────────────────────────────────────────
+  document.querySelectorAll('.update-status').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const pk       = this.dataset.pk;
+      const statusId = this.dataset.statusId;
+      const label    = this.textContent.trim();
+      const fd       = new FormData();
+      fd.append('status_atendimento_id', statusId);
+      fd.append('csrfmiddlewaretoken', csrfToken);
+
+      fetch(`/atendimentos/${pk}/status/`, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: fd,
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          const btnToggle = document.querySelector(`.status-btn[data-pk="${pk}"]`);
+          btnToggle.querySelector('.status-label').textContent = data.label !== '—' ? data.label : '— definir';
+          btnToggle.className = btnToggle.className
+            .replace(/btn-outline-\w+/, statusId ? 'btn-outline-success' : 'btn-outline-secondary');
+        }
+      })
+      .catch(() => {});
+    });
   });
 })();
 });

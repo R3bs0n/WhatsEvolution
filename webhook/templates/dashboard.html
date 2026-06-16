@@ -3,9 +3,11 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h4 class="mb-0"><i class="bi bi-speedometer2 me-2 text-success"></i>Dashboard</h4>
+  <h4 class="mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h4>
+  <span class="text-muted small">{{ request.user.get_full_name|default:request.user.username }} — {{ today|date:"d/m/Y" }}</span>
 </div>
 
+{# ── Cartões de resumo geral ── #}
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
     <div class="card text-center p-3">
@@ -27,12 +29,59 @@
   </div>
   <div class="col-6 col-md-3">
     <div class="card text-center p-3">
-      <div class="fs-2 fw-bold text-danger">{{ falhas }}</div>
-      <div class="text-muted small">Falhas de Envio</div>
+      <div class="fs-2 fw-bold" style="color:#7c3aed">{{ limitados }}</div>
+      <div class="text-muted small">Parados (Limite)</div>
+      {% if limitados > 0 %}
+      <a href="{% url 'atendimento-list' %}?status=L" class="stretched-link"></a>
+      {% endif %}
     </div>
   </div>
 </div>
 
+{# ── Barra de limite diário ── #}
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="fw-semibold small">
+        <i class="bi bi-speedometer me-1 text-primary"></i>Limite diário de mensagens
+      </span>
+      <span class="small fw-bold
+        {% if percentual_limite >= 100 %}text-danger
+        {% elif percentual_limite >= 80 %}text-warning
+        {% else %}text-success{% endif %}">
+        {{ mensagens_hoje }} / {{ limite_diario }}
+        <span class="text-muted fw-normal">({{ percentual_limite }}%)</span>
+      </span>
+    </div>
+    <div class="progress" style="height:14px; border-radius:8px;">
+      <div class="progress-bar
+        {% if percentual_limite >= 100 %}bg-danger
+        {% elif percentual_limite >= 80 %}bg-warning
+        {% else %}bg-success{% endif %}"
+        role="progressbar"
+        style="width: {{ percentual_limite }}%; border-radius:8px;"
+        aria-valuenow="{{ percentual_limite }}"
+        aria-valuemin="0"
+        aria-valuemax="100">
+      </div>
+    </div>
+    <div class="d-flex justify-content-between mt-1">
+      <span class="text-muted" style="font-size:.72rem;">0</span>
+      {% if percentual_limite >= 100 %}
+      <span class="text-danger fw-semibold" style="font-size:.72rem;">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>Limite atingido hoje
+      </span>
+      {% elif percentual_limite >= 80 %}
+      <span class="text-warning fw-semibold" style="font-size:.72rem;">
+        <i class="bi bi-exclamation-circle me-1"></i>Atenção: {{ limite_diario|add:"-"|add:mensagens_hoje }} restantes
+      </span>
+      {% endif %}
+      <span class="text-muted" style="font-size:.72rem;">{{ limite_diario }}</span>
+    </div>
+  </div>
+</div>
+
+{# ── Cartões de hoje / mês ── #}
 <div class="row g-3 mb-4">
   <div class="col-md-4">
     <div class="card p-3 border-start border-4 border-info">
@@ -54,6 +103,7 @@
   </div>
 </div>
 
+{# ── Atalhos rápidos ── #}
 <div class="row g-3">
   <div class="col-md-4">
     <a href="{% url 'pdf-upload' %}" class="card p-4 text-decoration-none text-dark d-block text-center">

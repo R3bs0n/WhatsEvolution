@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 
 from django.contrib import messages
@@ -6,11 +7,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .forms import AtendimentoForm
-from .models import Atendimento
+from .models import Atendimento, StatusAtendimento
 
 logger = logging.getLogger(__name__)
 
@@ -19,22 +21,65 @@ _MSG_DELAY_SECONDS = 3
 
 @login_required
 def atendimento_list(request):
-    qs = Atendimento.objects.select_related("situacao").order_by("-criado_em")
+    qs = Atendimento.objects.select_related("situacao", "status_atendimento").order_by("-criado_em")
 
     q = request.GET.get("q", "").strip()
     if q:
-        # Q objects mantêm o select_related e geram um único WHERE … OR …
         qs = qs.filter(Q(paciente__icontains=q) | Q(telefone__icontains=q))
+
     status = request.GET.get("status", "")
-    if status in ("N", "E", "S"):
+    if status in ("N", "E", "S", "L"):
         qs = qs.filter(status_enviado=status)
+
+    tipo = request.GET.get("tipo", "").strip()
+    if tipo:
+        qs = qs.filter(tp_procedimento__icontains=tipo)
+
+    status_clinico = request.GET.get("status_clinico", "").strip()
+    if status_clinico:
+        if status_clinico == "sem_status":
+            qs = qs.filter(status_atendimento__isnull=True)
+        else:
+            qs = qs.filter(status_atendimento__pk=status_clinico)
+
+    tipos_exame = (
+        Atendimento.objects
+        .exclude(tp_procedimento="")
+        .values_list("tp_procedimento", flat=True)
+        .distinct()
+        .order_by("tp_procedimento")
+    )
+
+    status_options = StatusAtendimento.objects.all()
 
     paginator = Paginator(qs, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
     return render(request, "atendimentos/list.html", {
-        "page_obj": page_obj, "q": q, "status": status,
+        "page_obj": page_obj,
+        "q": q,
+        "status": status,
+        "tipo": tipo,
+        "status_clinico": status_clinico,
+        "tipos_exame": tipos_exame,
+        "status_options": status_options,
         "total_count": paginator.count,
     })
+
+
+@login_required
+@require_POST
+def atendimento_update_status(request, pk):
+    obj = get_object_or_404(Atendimento, pk=pk)
+    status_id = request.POST.get("status_atendimento_id") or None
+    if status_id:
+        obj.status_atendimento = get_object_or_404(StatusAtendimento, pk=status_id)
+    else:
+        obj.status_atendimento = None
+    obj.save(update_fields=["status_atendimento"])
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        label = str(obj.status_atendimento) if obj.status_atendimento else "—"
+        return JsonResponse({"ok": True, "label": label})
+    return redirect("atendimento-list")
 
 
 @login_required
@@ -135,7 +180,7 @@ def export_csv(request):
     if q:
         qs = qs.filter(Q(paciente__icontains=q) | Q(telefone__icontains=q))
     status = request.GET.get("status", "")
-    if status in ("N", "E", "S"):
+    if status in ("N", "E", "S", "L"):
         qs = qs.filter(status_enviado=status)
 
     response = HttpResponse(content_type="text/csv; charset=utf-8-sig")

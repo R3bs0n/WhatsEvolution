@@ -47,12 +47,30 @@
       <div class="card-header small fw-semibold text-muted">Status de Envio</div>
       <div class="card-body">
         <dl class="row mb-0 small">
-          <dt class="col-3">Status</dt>
+          <dt class="col-3">Status envio</dt>
           <dd class="col-9">
             {% if object.status_enviado == "S" %}
               <span class="badge bg-success">Enviado</span>
+            {% elif object.status_enviado == "E" %}
+              <span class="badge bg-info text-dark">Enfileirado</span>
+            {% elif object.status_enviado == "L" %}
+              <span class="badge" style="background:#7c3aed;color:#fff">Limitado</span>
+              <span class="text-muted small ms-1">Parado pelo limite diário</span>
             {% else %}
               <span class="badge bg-warning text-dark">Pendente</span>
+            {% endif %}
+          </dd>
+          <dt class="col-3">Status clínico</dt>
+          <dd class="col-9">
+            {% if object.status_atendimento %}
+              <span class="badge
+                {% if object.status_atendimento.nome == 'Atendido' %}bg-status-atendido
+                {% elif object.status_atendimento.nome == 'A atender' %}bg-status-a-atender
+                {% else %}bg-status-feito{% endif %}">
+                {{ object.status_atendimento }}
+              </span>
+            {% else %}
+              <span class="text-muted">—</span>
             {% endif %}
           </dd>
           <dt class="col-3">Data envio</dt><dd class="col-9">{{ object.data_envio|date:"d/m/Y H:i"|default:"—" }}</dd>
@@ -61,6 +79,19 @@
       </div>
     </div>
   </div>
+
+  {% if object.observacao %}
+  <div class="col-12">
+    <div class="card border-start border-4 border-warning">
+      <div class="card-header small fw-semibold text-muted">
+        <i class="bi bi-sticky-fill me-1 text-warning"></i>Observação
+      </div>
+      <div class="card-body">
+        <p class="mb-0 small" style="white-space: pre-wrap;">{{ object.observacao }}</p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {% if logs %}

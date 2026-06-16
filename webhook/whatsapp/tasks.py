@@ -51,8 +51,33 @@ def dispatch_batch_after_import(self, atendimento_ids: list) -> dict:
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
 def send_whatsapp_for_atendimento(self, atendimento_id: int) -> bool:
+    from django.utils import timezone
     from atendimentos.models import Atendimento
+    from whatsapp.models import ConfiguracaoSistema, EnvioWhatsAppLog
     from whatsapp.services.sender import WhatsAppSendService
+
+    config = ConfiguracaoSistema.get()
+    hoje = timezone.now().date()
+    enviados_hoje = EnvioWhatsAppLog.objects.filter(enviado_em__date=hoje, sucesso=True).count()
+    if enviados_hoje >= config.limite_diario_mensagens:
+        logger.warning(
+            "Limite diário de %d mensagens atingido. Atendimento %s marcado como 'Limitado'.",
+            config.limite_diario_mensagens,
+            atendimento_id,
+        )
+        from atendimentos.models import Atendimento
+        Atendimento.objects.filter(
+            pk=atendimento_id, status_enviado__in=["N", "E"]
+        ).update(status_enviado="L")
+        EnvioWhatsAppLog.objects.create(
+            atendimento_id=atendimento_id,
+            telefone="",
+            mensagem="",
+            status_retorno="LIMITE_DIARIO",
+            detalhe_retorno=f"Limite diário de {config.limite_diario_mensagens} mensagens atingido.",
+            sucesso=False,
+        )
+        return False
 
     try:
         with transaction.atomic():

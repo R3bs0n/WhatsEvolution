@@ -3,11 +3,12 @@ import logging
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db import transaction
-from django.shortcuts import render
+from django.db import IntegrityError, transaction
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from atendimentos.models import Atendimento
-from whatsapp.models import EnvioWhatsAppLog
+from whatsapp.models import ContatoBloqueado, EnvioWhatsAppLog
 from whatsapp.tasks import send_whatsapp_for_atendimento
 
 logger = logging.getLogger(__name__)
@@ -67,3 +68,32 @@ def logs(request):
     paginator = Paginator(qs, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
     return render(request, "whatsapp/logs.html", {"page_obj": page_obj, "search": search})
+
+
+@login_required
+def optout_list(request):
+    if request.method == "POST":
+        telefone = request.POST.get("telefone", "").strip()
+        if telefone:
+            try:
+                ContatoBloqueado.objects.create(telefone=telefone)
+                messages.success(request, f"Número {telefone} adicionado à lista de bloqueados.")
+            except IntegrityError:
+                messages.warning(request, f"Número {telefone} já está na lista de bloqueados.")
+        else:
+            messages.error(request, "Informe um número de telefone válido.")
+        return redirect("whatsapp-optout")
+
+    qs = ContatoBloqueado.objects.order_by("-data_bloqueio")
+    paginator = Paginator(qs, 50)
+    page_obj = paginator.get_page(request.GET.get("page"))
+    return render(request, "whatsapp/optout_list.html", {"page_obj": page_obj})
+
+
+@login_required
+@require_POST
+def optout_delete(request, pk):
+    obj = get_object_or_404(ContatoBloqueado, pk=pk)
+    obj.delete()
+    messages.success(request, f"Número {obj.telefone} removido da lista de bloqueados.")
+    return redirect("whatsapp-optout")

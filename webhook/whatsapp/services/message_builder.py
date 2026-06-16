@@ -4,7 +4,8 @@ _DEFAULT_TEMPLATE = (
     "Clínica Médica Saúde Popular.\n\n"
     "📅 Entre em contato para confirmar sua consulta ou obter mais informações:\n"
     "👉 {contato_url}\n\n"
-    "Atenciosamente,\nClínica Médica Saúde Popular"
+    "Atenciosamente,\nClínica Médica Saúde Popular\n\n"
+    "_(Responda SAIR para não receber mais mensagens)_"
 )
 
 

@@ -30,6 +30,19 @@ class WhatsAppSendService:
             logger.warning("Telefone inválido (atendimento %s): %s", atendimento.pk, exc)
             return False
 
+        from whatsapp.models import ContatoBloqueado
+        if ContatoBloqueado.objects.filter(telefone=phone).exists():
+            EnvioWhatsAppLog.objects.create(
+                atendimento=atendimento,
+                telefone=phone,
+                mensagem="",
+                status_retorno="BLOQUEADO",
+                detalhe_retorno="Número na lista de opt-out.",
+                sucesso=False,
+            )
+            logger.info("Envio ignorado — número bloqueado (atendimento %s): %s", atendimento.pk, phone)
+            return False
+
         mensagem = build_message(atendimento.paciente, atendimento.exame_procedimento)
         resultado = self.provider.send_message(phone, mensagem)
 

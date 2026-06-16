@@ -2,6 +2,44 @@ from django.db import models
 from django.utils import timezone
 
 
+class ContatoBloqueado(models.Model):
+    telefone = models.CharField(max_length=30, unique=True)
+    data_bloqueio = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-data_bloqueio"]
+        verbose_name = "Contato bloqueado"
+        verbose_name_plural = "Contatos bloqueados (opt-out)"
+        db_table = "contatos_bloqueados"
+
+    def __str__(self):
+        return self.telefone
+
+
+class ConfiguracaoSistema(models.Model):
+    limite_diario_mensagens = models.IntegerField(
+        default=1000,
+        verbose_name="Limite diário de mensagens",
+    )
+
+    class Meta:
+        verbose_name = "Configuração do sistema"
+        verbose_name_plural = "Configuração do sistema"
+        db_table = "configuracao_sistema"
+
+    def __str__(self):
+        return f"Configuração — limite diário: {self.limite_diario_mensagens}"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+
 class EnvioWhatsAppLog(models.Model):
     atendimento = models.ForeignKey(
         "atendimentos.Atendimento",

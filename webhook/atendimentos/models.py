@@ -1,6 +1,19 @@
 from django.db import models
 
 
+class StatusAtendimento(models.Model):
+    nome = models.CharField(max_length=50, unique=True)
+
+    class Meta:
+        verbose_name = "Status do atendimento"
+        verbose_name_plural = "Status do atendimento"
+        ordering = ["nome"]
+        db_table = "status_atendimento"
+
+    def __str__(self):
+        return self.nome
+
+
 class SituacaoAtendimento(models.Model):
     nome = models.CharField(max_length=100, unique=True)
     ativo = models.BooleanField(default=True, db_index=True)
@@ -18,7 +31,12 @@ class SituacaoAtendimento(models.Model):
 
 
 class Atendimento(models.Model):
-    STATUS_CHOICES = [("N", "Não enviado"), ("E", "Enfileirado"), ("S", "Enviado")]
+    STATUS_CHOICES = [
+        ("N", "Não enviado"),
+        ("E", "Enfileirado"),
+        ("S", "Enviado"),
+        ("L", "Limitado"),
+    ]
 
     situacao = models.ForeignKey(
         SituacaoAtendimento,
@@ -37,6 +55,14 @@ class Atendimento(models.Model):
     data_agendamento = models.DateField(null=True, blank=True, db_index=True)
     horario_agendamento = models.TimeField(null=True, blank=True, db_index=True)
     observacao = models.TextField(blank=True)
+    status_atendimento = models.ForeignKey(
+        StatusAtendimento,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="atendimentos",
+        verbose_name="Status clínico",
+    )
     status_enviado = models.CharField(
         max_length=1, choices=STATUS_CHOICES, default="N", db_index=True
     )

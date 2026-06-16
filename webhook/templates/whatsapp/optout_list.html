@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Bloqueados (Opt-out){% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">
+    <i class="bi bi-slash-circle-fill me-2 text-danger"></i>Lista de Opt-out
+  </h4>
+  <span class="badge bg-secondary">{{ page_obj.paginator.count }} número(s) bloqueado(s)</span>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header small fw-semibold text-muted">
+        <i class="bi bi-plus-circle me-1"></i>Adicionar número bloqueado
+      </div>
+      <div class="card-body">
+        <form method="post" class="d-flex gap-2">
+          {% csrf_token %}
+          <input type="tel" name="telefone" class="form-control form-control-sm"
+                 placeholder="Ex: 5548999990001" required>
+          <button type="submit" class="btn btn-danger btn-sm text-nowrap">
+            <i class="bi bi-slash-circle me-1"></i>Bloquear
+          </button>
+        </form>
+        <div class="form-text mt-1">Informe o número com DDI e DDD (ex: 5548988762025).</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Telefone</th>
+            <th>Data do bloqueio</th>
+            <th style="width:80px">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for contato in page_obj %}
+          <tr>
+            <td class="small fw-semibold">{{ contato.telefone }}</td>
+            <td class="small text-muted">{{ contato.data_bloqueio|date:"d/m/Y H:i" }}</td>
+            <td>
+              <form method="post" action="{% url 'whatsapp-optout-delete' contato.pk %}"
+                    onsubmit="return confirm('Remover {{ contato.telefone }} da lista de bloqueados?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Remover bloqueio">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="3" class="text-center text-muted py-4">
+              <i class="bi bi-check-circle-fill text-success me-2"></i>
+              Nenhum número bloqueado no momento.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if page_obj.has_previous %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a>
+      </li>
+    {% endif %}
+    <li class="page-item disabled">
+      <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    </li>
+    {% if page_obj.has_next %}
+      <li class="page-item">
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a>
+      </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}
