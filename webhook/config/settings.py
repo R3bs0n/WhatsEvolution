@@ -110,6 +110,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Django rejeita POSTs com mais campos do que este limite (padrão: 1000). A ação
+# "excluir selecionados" do admin envia um campo por linha marcada — ao tentar
+# excluir mais de 15 mil atendimentos de uma vez, o sistema retornou erro
+# "Too many fields sent" e abortou a operação sem apagar nada.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
+
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
