@@ -10,6 +10,11 @@ class PdfImportLog(models.Model):
     ]
 
     filename = models.CharField(max_length=255)
+    nome = models.CharField(max_length=255, blank=True, verbose_name="Nome")
+    periodo = models.DateField(
+        null=True, blank=True, verbose_name="Período",
+        help_text="Mês/ano a que este PDF se refere (armazenado como 1º dia do mês)"
+    )
     user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
     total_extraidos = models.PositiveIntegerField(default=0)
     total_inseridos = models.PositiveIntegerField(default=0)

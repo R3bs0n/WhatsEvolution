@@ -4,18 +4,40 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0"><i class="bi bi-journal-text me-2"></i>Logs de Envio</h4>
+  <span class="text-muted small">{{ total_count }} registro(s)</span>
 </div>
 
+{# ── Filtros ── #}
 <div class="card mb-3">
   <div class="card-body py-2">
-    <form method="get" class="row g-2 align-items-center">
-      <div class="col-md-6">
+    <form method="get" class="row g-2 align-items-center" id="form-filtro">
+      <div class="col-md-5">
         <input type="text" name="q" value="{{ search }}" class="form-control form-control-sm"
                placeholder="Buscar por paciente ou telefone...">
       </div>
-      <div class="col-md-3 d-flex gap-2">
-        <button type="submit" class="btn btn-sm btn-primary flex-fill">
-          <i class="bi bi-search me-1"></i>Filtrar
+      <div class="col-auto">
+        <div class="btn-group btn-group-sm" role="group">
+          <a href="?q={{ search }}&status=todos"
+             class="btn {% if status_filter == 'todos' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Todos
+          </a>
+          <a href="?q={{ search }}&status=enviado"
+             class="btn {% if status_filter == 'enviado' %}btn-success{% else %}btn-outline-success{% endif %}">
+            Enviado
+          </a>
+          <a href="?q={{ search }}&status=bloqueado"
+             class="btn {% if status_filter == 'bloqueado' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+            Bloqueado
+          </a>
+          <a href="?q={{ search }}&status=falha"
+             class="btn {% if status_filter == 'falha' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+            Falha
+          </a>
+        </div>
+      </div>
+      <div class="col-auto d-flex gap-2">
+        <button type="submit" class="btn btn-sm btn-primary">
+          <i class="bi bi-search me-1"></i>Buscar
         </button>
         <a href="{% url 'whatsapp-logs' %}" class="btn btn-sm btn-outline-secondary">Limpar</a>
       </div>
@@ -23,65 +45,100 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover table-sm mb-0">
-        <thead class="table-light">
-          <tr>
-            <th>Data/Hora</th>
-            <th>Paciente</th>
-            <th>Telefone</th>
-            <th>Status</th>
-            <th>Cód. Retorno</th>
-            <th>Detalhe</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for log in page_obj %}
-          <tr>
-            <td class="small">{{ log.enviado_em|date:"d/m/Y H:i" }}</td>
-            <td class="small">{{ log.atendimento.paciente|default:"—" }}</td>
-            <td class="small">{{ log.telefone }}</td>
-            <td>
-              {% if log.sucesso %}
-                <span class="badge bg-success">Enviado</span>
-              {% elif log.status_retorno == "BLOQUEADO" %}
-                <span class="badge bg-secondary">Bloqueado</span>
-              {% else %}
-                <span class="badge bg-danger">Falha</span>
-              {% endif %}
-            </td>
-            <td class="small">
-              {% if log.codigo_retorno %}
-                {% if log.sucesso %}
-                  <span class="badge bg-success bg-opacity-75">{{ log.codigo_retorno }}</span>
-                {% else %}
-                  <span class="badge bg-danger bg-opacity-75">{{ log.codigo_retorno }}</span>
+{# ── Ações em lote (apenas para falhas) ── #}
+{% if falha_count > 0 %}
+<div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+  <button class="btn btn-sm btn-outline-danger" id="btn-excluir-sel" disabled
+          data-bs-toggle="modal" data-bs-target="#modal-confirm-sel">
+    <i class="bi bi-trash me-1"></i>Excluir selecionados
+  </button>
+  <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modal-confirm-all">
+    <i class="bi bi-trash-fill me-1"></i>Excluir todas as falhas
+    <span class="badge bg-white text-danger ms-1">{{ falha_count }}</span>
+  </button>
+  <span class="text-muted small" id="sel-count" style="display:none">
+    <span id="sel-num">0</span> selecionado(s)
+  </span>
+</div>
+{% endif %}
+
+{# ── Tabela ── #}
+<form method="post" id="form-delete">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="delete_selected">
+  <input type="hidden" name="query_string" value="{{ query_string }}">
+
+  <div class="card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="width:38px;">
+                <input type="checkbox" id="chk-all" class="form-check-input" title="Selecionar falhas da página">
+              </th>
+              <th>Data/Hora</th>
+              <th>Paciente</th>
+              <th>Telefone</th>
+              <th>Status</th>
+              <th>Cód. Retorno</th>
+              <th>Detalhe</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in page_obj %}
+            <tr>
+              <td>
+                {% if not log.sucesso and log.status_retorno|lower != "bloqueado" %}
+                <input type="checkbox" name="ids" value="{{ log.pk }}"
+                       class="form-check-input chk-row">
                 {% endif %}
-              {% else %}
-                <span class="text-muted">—</span>
-              {% endif %}
-            </td>
-            <td class="small text-muted">{{ log.status_retorno }}{% if log.detalhe_retorno %} — {{ log.detalhe_retorno|truncatechars:60 }}{% endif %}</td>
-          </tr>
-          {% empty %}
-          <tr>
-            <td colspan="6" class="text-center text-muted py-4">Nenhum log de envio encontrado.</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+              </td>
+              <td class="small">{{ log.enviado_em|date:"d/m/Y H:i" }}</td>
+              <td class="small">{{ log.atendimento.paciente|default:"—" }}</td>
+              <td class="small">{{ log.telefone }}</td>
+              <td>
+                {% if log.sucesso %}
+                  <span class="badge bg-success">Enviado</span>
+                {% elif log.status_retorno|lower == "bloqueado" %}
+                  <span class="badge bg-secondary">Bloqueado</span>
+                {% else %}
+                  <span class="badge bg-danger">Falha</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if log.codigo_retorno %}
+                  {% if log.sucesso %}
+                    <span class="badge bg-success bg-opacity-75">{{ log.codigo_retorno }}</span>
+                  {% else %}
+                    <span class="badge bg-danger bg-opacity-75">{{ log.codigo_retorno }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted">
+                {{ log.status_retorno }}{% if log.detalhe_retorno %} — {{ log.detalhe_retorno|truncatechars:60 }}{% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">Nenhum log de envio encontrado.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-</div>
+</form>
 
 {% if page_obj.has_other_pages %}
 <nav class="mt-3">
   <ul class="pagination pagination-sm justify-content-center">
     {% if page_obj.has_previous %}
       <li class="page-item">
-        <a class="page-link" href="?q={{ search }}&page={{ page_obj.previous_page_number }}">‹</a>
+        <a class="page-link" href="?{{ query_string }}&page={{ page_obj.previous_page_number }}">‹</a>
       </li>
     {% endif %}
     <li class="page-item disabled">
@@ -89,10 +146,100 @@
     </li>
     {% if page_obj.has_next %}
       <li class="page-item">
-        <a class="page-link" href="?q={{ search }}&page={{ page_obj.next_page_number }}">›</a>
+        <a class="page-link" href="?{{ query_string }}&page={{ page_obj.next_page_number }}">›</a>
       </li>
     {% endif %}
   </ul>
 </nav>
 {% endif %}
+
+{# ── Modal: excluir selecionados ── #}
+<div class="modal fade" id="modal-confirm-sel" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Confirmar exclusão</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Excluir <strong id="modal-sel-count">0</strong> registro(s) de falha selecionados?
+        Essa ação não pode ser desfeita.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-sel">Excluir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Modal: excluir todas as falhas ── #}
+<div class="modal fade" id="modal-confirm-all" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Confirmar exclusão em massa</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Excluir <strong>{{ falha_count }}</strong> registro(s) de falha? Essa ação não pode ser desfeita.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete_all_falha">
+          <input type="hidden" name="query_string" value="{{ query_string }}">
+          <button type="submit" class="btn btn-danger">Excluir todas</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const chkAll  = document.getElementById('chk-all');
+  const chkRows = () => document.querySelectorAll('.chk-row');
+  const btnSel  = document.getElementById('btn-excluir-sel');
+  const selCount = document.getElementById('sel-count');
+  const selNum   = document.getElementById('sel-num');
+  const modalSelCount = document.getElementById('modal-sel-count');
+  const formDel = document.getElementById('form-delete');
+
+  function updateSelUI() {
+    const checked = [...chkRows()].filter(c => c.checked);
+    const n = checked.length;
+    if (btnSel) {
+      btnSel.disabled = n === 0;
+      if (selCount) {
+        selCount.style.display = n > 0 ? '' : 'none';
+        selNum.textContent = n;
+      }
+      if (modalSelCount) modalSelCount.textContent = n;
+    }
+  }
+
+  if (chkAll) {
+    chkAll.addEventListener('change', function () {
+      chkRows().forEach(c => { c.checked = this.checked; });
+      updateSelUI();
+    });
+  }
+
+  document.addEventListener('change', function (e) {
+    if (e.target.classList.contains('chk-row')) updateSelUI();
+  });
+
+  const btnConfirmSel = document.getElementById('btn-confirm-sel');
+  if (btnConfirmSel) {
+    btnConfirmSel.addEventListener('click', function () {
+      bootstrap.Modal.getInstance(document.getElementById('modal-confirm-sel')).hide();
+      formDel.submit();
+    });
+  }
+})();
+</script>
 {% endblock %}

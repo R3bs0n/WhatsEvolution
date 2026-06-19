@@ -72,6 +72,7 @@ def _process_batch(
     situacao: SituacaoAtendimento,
     filename: str,
     now,
+    pdf_import_log=None,
 ) -> tuple[int, int]:
     """Dedup within batch, check DB once, bulk_create new records.
 
@@ -130,6 +131,7 @@ def _process_batch(
             data_agendamento=data_agend,
             horario_agendamento=horario,
             pdf_nome_arquivo=filename,
+            pdf_import=pdf_import_log,
             data_extracao=now,
             status_enviado="N",
         ))
@@ -152,6 +154,7 @@ def bulk_import_records(
     records_iter: Iterator[ExtractedRecord],
     situacao: SituacaoAtendimento,
     filename: str,
+    pdf_import_log=None,
 ) -> ImportResult:
     """Import records from the extractor generator using bulk DB operations."""
     now = timezone.now()
@@ -170,14 +173,14 @@ def bulk_import_records(
         batch.append(rec)
 
         if len(batch) >= BATCH_SIZE:
-            ins, ign = _process_batch(batch, situacao, filename, now)
+            ins, ign = _process_batch(batch, situacao, filename, now, pdf_import_log)
             total_inseridos += ins
             total_ignorados += ign
             batch.clear()
 
     # Flush remaining records
     if batch:
-        ins, ign = _process_batch(batch, situacao, filename, now)
+        ins, ign = _process_batch(batch, situacao, filename, now, pdf_import_log)
         total_inseridos += ins
         total_ignorados += ign
 

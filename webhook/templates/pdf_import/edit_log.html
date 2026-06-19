@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Editar PDF — {{ log.filename }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-2">
+  <a href="{% url 'pdf-upload' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+  <h4 class="mb-0"><i class="bi bi-pencil-square me-2 text-primary"></i>Editar informações do PDF</h4>
+</div>
+
+<div class="card" style="max-width:560px;">
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      <i class="bi bi-file-earmark-pdf-fill text-danger me-1"></i>
+      <strong>{{ log.filename }}</strong>
+      &nbsp;·&nbsp; Importado em {{ log.created_at|date:"d/m/Y H:i" }}
+      &nbsp;·&nbsp; {{ log.total_inseridos }} registros
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Nome <span class="text-muted fw-normal">(opcional)</span></label>
+        <input type="text" name="nome" value="{{ log.nome }}"
+               class="form-control" placeholder="Ex: Exames Abril — UBS Centro">
+        <div class="form-text">Nome amigável para identificar este PDF na lista.</div>
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label fw-semibold">
+          Período <span class="text-muted fw-normal">(mês/ano a que o PDF se refere)</span>
+        </label>
+        <select name="periodo" class="form-select">
+          <option value="">— Não definido —</option>
+          {% for value, label in periodo_choices %}
+            <option value="{{ value }}" {% if value == periodo_atual %}selected{% endif %}>
+              {{ label }}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="form-text">
+          Selecione o mês/ano dos agendamentos contidos neste PDF,
+          independente de quando foi importado.
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check-lg me-1"></i>Salvar
+        </button>
+        <a href="{% url 'pdf-upload' %}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

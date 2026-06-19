@@ -57,21 +57,29 @@
         <table class="table table-sm mb-0">
           <thead class="table-light">
             <tr>
-              <th>Arquivo</th>
-              <th>Usuário</th>
+              <th>Arquivo / Nome</th>
+              <th>Período</th>
               <th>Inseridos</th>
-              <th>Ignorados</th>
               <th>Status</th>
               <th>Data</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {% for log in logs_recentes %}
             <tr>
-              <td class="small text-truncate" style="max-width:160px">{{ log.filename }}</td>
-              <td class="small">{{ log.user.username|default:"—" }}</td>
+              <td class="small">
+                <div class="text-truncate" style="max-width:150px" title="{{ log.filename }}">{{ log.filename }}</div>
+                {% if log.nome %}<div class="text-muted" style="font-size:.75rem">{{ log.nome }}</div>{% endif %}
+              </td>
+              <td class="small">
+                {% if log.periodo %}
+                  <span class="badge bg-primary bg-opacity-75">{{ log.periodo|date:"m/Y" }}</span>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
               <td class="small text-success">{{ log.total_inseridos }}</td>
-              <td class="small text-warning">{{ log.total_ignorados }}</td>
               <td>
                 {% if log.status == "SUCESSO" %}
                   <span class="badge bg-success">Sucesso</span>
@@ -82,6 +90,12 @@
                 {% endif %}
               </td>
               <td class="small">{{ log.created_at|date:"d/m H:i" }}</td>
+              <td>
+                <a href="{% url 'pdf-log-edit' log.pk %}" class="btn btn-xs btn-outline-secondary"
+                   style="font-size:.75rem; padding:2px 8px;">
+                  <i class="bi bi-pencil"></i>
+                </a>
+              </td>
             </tr>
             {% empty %}
             <tr><td colspan="6" class="text-center text-muted py-3">Nenhuma importação ainda.</td></tr>

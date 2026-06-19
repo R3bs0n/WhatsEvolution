@@ -69,6 +69,14 @@ class Atendimento(models.Model):
     data_extracao = models.DateTimeField(null=True, blank=True)
     data_envio = models.DateTimeField(null=True, blank=True)
     pdf_nome_arquivo = models.CharField(max_length=255, blank=True)
+    pdf_import = models.ForeignKey(
+        "pdf_import.PdfImportLog",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="atendimentos",
+        verbose_name="Importação PDF",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 

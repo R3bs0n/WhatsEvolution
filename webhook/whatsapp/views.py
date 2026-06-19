@@ -58,16 +58,64 @@ def send_panel(request):
 
 @login_required
 def logs(request):
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+        if action == "delete_selected":
+            ids = request.POST.getlist("ids")
+            if ids:
+                deleted, _ = (
+                    EnvioWhatsAppLog.objects
+                    .filter(pk__in=ids, sucesso=False)
+                    .exclude(status_retorno__iexact="BLOQUEADO")
+                    .delete()
+                )
+                messages.success(request, f"{deleted} registro(s) de falha excluído(s).")
+            else:
+                messages.warning(request, "Nenhum registro selecionado.")
+        elif action == "delete_all_falha":
+            deleted, _ = (
+                EnvioWhatsAppLog.objects
+                .filter(sucesso=False)
+                .exclude(status_retorno__iexact="BLOQUEADO")
+                .delete()
+            )
+            messages.success(request, f"{deleted} registro(s) de falha excluído(s).")
+        return redirect(request.get_full_path().split("?")[0] + "?" + request.POST.get("query_string", ""))
+
     qs = EnvioWhatsAppLog.objects.select_related("atendimento").order_by("-enviado_em")
     search = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "todos").lower()
+
     if search:
-        qs = (
-            qs.filter(telefone__icontains=search)
-            | qs.filter(atendimento__paciente__icontains=search)
-        )
+        qs = qs.filter(telefone__icontains=search) | qs.filter(atendimento__paciente__icontains=search)
+
+    if status_filter == "enviado":
+        qs = qs.filter(sucesso=True)
+    elif status_filter == "bloqueado":
+        qs = qs.filter(sucesso=False, status_retorno__iexact="BLOQUEADO")
+    elif status_filter == "falha":
+        qs = qs.filter(sucesso=False).exclude(status_retorno__iexact="BLOQUEADO")
+
+    total_count = qs.count()
+    falha_count = (
+        qs.filter(sucesso=False).exclude(status_retorno__iexact="BLOQUEADO").count()
+        if status_filter in ("todos", "falha") else 0
+    )
+
     paginator = Paginator(qs, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
-    return render(request, "whatsapp/logs.html", {"page_obj": page_obj, "search": search})
+
+    import urllib.parse
+    query_string = urllib.parse.urlencode({k: v for k, v in request.GET.items() if k != "page"})
+
+    return render(request, "whatsapp/logs.html", {
+        "page_obj": page_obj,
+        "search": search,
+        "status_filter": status_filter,
+        "total_count": total_count,
+        "falha_count": falha_count,
+        "query_string": query_string,
+    })
 
 
 @login_required
