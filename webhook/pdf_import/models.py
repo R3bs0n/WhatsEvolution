@@ -1,6 +1,8 @@
 from django.contrib.auth.models import User
 from django.db import models
 
+from core.managers import TenantManager
+
 
 class PdfImportLog(models.Model):
     STATUS_CHOICES = [
@@ -9,6 +11,10 @@ class PdfImportLog(models.Model):
         ("ERRO", "Erro"),
     ]
 
+    empresa = models.ForeignKey(
+        "empresas.Empresa", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="pdf_imports",
+    )
     filename = models.CharField(max_length=255)
     nome = models.CharField(max_length=255, blank=True, verbose_name="Nome")
     periodo = models.DateField(
@@ -23,6 +29,8 @@ class PdfImportLog(models.Model):
     mensagem = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = TenantManager()
 
     class Meta:
         ordering = ["-created_at"]

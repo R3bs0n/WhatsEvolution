@@ -21,7 +21,12 @@ _MSG_DELAY_SECONDS = 3
 
 @login_required
 def atendimento_list(request):
-    qs = Atendimento.objects.select_related("situacao", "status_atendimento").order_by("-criado_em")
+    empresa = request.empresa
+    qs = (
+        Atendimento.objects.for_empresa(empresa)
+        .select_related("situacao", "status_atendimento")
+        .order_by("-criado_em")
+    )
 
     q = request.GET.get("q", "").strip()
     if q:
@@ -43,14 +48,14 @@ def atendimento_list(request):
             qs = qs.filter(status_atendimento__pk=status_clinico)
 
     tipos_exame = (
-        Atendimento.objects
+        Atendimento.objects.for_empresa(empresa)
         .exclude(exame_procedimento="")
         .values_list("exame_procedimento", flat=True)
         .distinct()
         .order_by("exame_procedimento")
     )
 
-    status_options = StatusAtendimento.objects.all()
+    status_options = StatusAtendimento.objects.for_empresa(empresa)
 
     paginator = Paginator(qs, 50)
     page_obj = paginator.get_page(request.GET.get("page"))
@@ -69,10 +74,13 @@ def atendimento_list(request):
 @login_required
 @require_POST
 def atendimento_update_status(request, pk):
-    obj = get_object_or_404(Atendimento, pk=pk)
+    empresa = request.empresa
+    obj = get_object_or_404(Atendimento.objects.for_empresa(empresa), pk=pk)
     status_id = request.POST.get("status_atendimento_id") or None
     if status_id:
-        obj.status_atendimento = get_object_or_404(StatusAtendimento, pk=status_id)
+        obj.status_atendimento = get_object_or_404(
+            StatusAtendimento.objects.for_empresa(empresa), pk=status_id
+        )
     else:
         obj.status_atendimento = None
     obj.save(update_fields=["status_atendimento"])
@@ -84,41 +92,49 @@ def atendimento_update_status(request, pk):
 
 @login_required
 def atendimento_create(request):
+    empresa = request.empresa
     if request.method == "POST":
-        form = AtendimentoForm(request.POST)
+        form = AtendimentoForm(request.POST, empresa=empresa)
         if form.is_valid():
-            form.save()
+            obj = form.save(commit=False)
+            obj.empresa = empresa
+            obj.save()
             messages.success(request, "Atendimento criado com sucesso.")
             return redirect("atendimento-list")
     else:
-        form = AtendimentoForm()
+        form = AtendimentoForm(empresa=empresa)
     return render(request, "atendimentos/form.html", {"form": form, "title": "Novo Atendimento"})
 
 
 @login_required
 def atendimento_update(request, pk):
-    obj = get_object_or_404(Atendimento, pk=pk)
+    empresa = request.empresa
+    obj = get_object_or_404(Atendimento.objects.for_empresa(empresa), pk=pk)
     if request.method == "POST":
-        form = AtendimentoForm(request.POST, instance=obj)
+        form = AtendimentoForm(request.POST, instance=obj, empresa=empresa)
         if form.is_valid():
             form.save()
             messages.success(request, "Atendimento atualizado.")
             return redirect("atendimento-detail", pk=obj.pk)
     else:
-        form = AtendimentoForm(instance=obj)
+        form = AtendimentoForm(instance=obj, empresa=empresa)
     return render(request, "atendimentos/form.html", {"form": form, "title": "Editar Atendimento", "object": obj})
 
 
 @login_required
 def atendimento_detail(request, pk):
-    obj = get_object_or_404(Atendimento.objects.select_related("situacao"), pk=pk)
+    empresa = request.empresa
+    obj = get_object_or_404(
+        Atendimento.objects.for_empresa(empresa).select_related("situacao"), pk=pk
+    )
     logs = obj.whatsapp_logs.order_by("-enviado_em")[:20]
     return render(request, "atendimentos/detail.html", {"object": obj, "logs": logs})
 
 
 @login_required
 def atendimento_delete(request, pk):
-    obj = get_object_or_404(Atendimento, pk=pk)
+    empresa = request.empresa
+    obj = get_object_or_404(Atendimento.objects.for_empresa(empresa), pk=pk)
     if request.method == "POST":
         obj.delete()
         messages.success(request, "Atendimento excluído.")
@@ -131,6 +147,7 @@ def atendimento_dispatch(request):
     if request.method != "POST":
         return redirect("atendimento-list")
 
+    empresa = request.empresa
     force = request.POST.get("force", "pending")
     raw_ids = request.POST.getlist("ids")
     if not raw_ids:
@@ -146,17 +163,20 @@ def atendimento_dispatch(request):
 
     with transaction.atomic():
         if force == "all":
-            # Reseta registros já enviados para "N" para que possam ser reenviados
-            Atendimento.objects.filter(pk__in=ids, status_enviado="S").update(status_enviado="N")
+            Atendimento.objects.for_empresa(empresa).filter(
+                pk__in=ids, status_enviado="S"
+            ).update(status_enviado="N")
 
         enfileirados = list(
-            Atendimento.objects
+            Atendimento.objects.for_empresa(empresa)
             .select_for_update(skip_locked=True)
             .filter(pk__in=ids, status_enviado="N")
             .values_list("pk", flat=True)
         )
         if enfileirados:
-            Atendimento.objects.filter(pk__in=enfileirados).update(status_enviado="E")
+            Atendimento.objects.for_empresa(empresa).filter(
+                pk__in=enfileirados
+            ).update(status_enviado="E")
 
     if not enfileirados:
         messages.warning(request, "Nenhum dos selecionados estava pendente para envio.")
@@ -171,10 +191,14 @@ def atendimento_dispatch(request):
     return redirect("atendimento-list")
 
 
-
 @login_required
 def export_csv(request):
-    qs = Atendimento.objects.select_related("situacao").order_by("-criado_em")
+    empresa = request.empresa
+    qs = (
+        Atendimento.objects.for_empresa(empresa)
+        .select_related("situacao")
+        .order_by("-criado_em")
+    )
 
     q = request.GET.get("q", "").strip()
     if q:

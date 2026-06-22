@@ -35,22 +35,32 @@ def get_periodo_choices():
             year += 1
     return choices
 
+
 logger = logging.getLogger(__name__)
 
 _extractor = PDFExtractorService()
 
 
-def _get_or_create_situacao(nome: str) -> SituacaoAtendimento:
+def _get_or_create_situacao(nome: str, empresa=None) -> SituacaoAtendimento:
     obj, _ = SituacaoAtendimento.objects.get_or_create(
-        nome=nome, defaults={"ativo": True}
+        nome=nome, empresa=empresa, defaults={"ativo": True}
     )
     return obj
 
 
 @login_required
 def upload_pdf(request):
-    logs_recentes = PdfImportLog.objects.select_related("user").order_by("-created_at")[:10]
-    imported_filenames = list(PdfImportLog.objects.values_list("filename", flat=True).distinct())
+    empresa = request.empresa
+    logs_recentes = (
+        PdfImportLog.objects.for_empresa(empresa)
+        .select_related("user")
+        .order_by("-created_at")[:10]
+    )
+    imported_filenames = list(
+        PdfImportLog.objects.for_empresa(empresa)
+        .values_list("filename", flat=True)
+        .distinct()
+    )
 
     if request.method == "POST":
         form = PdfUploadForm(request.POST, request.FILES)
@@ -60,14 +70,17 @@ def upload_pdf(request):
             content = arquivo.read()
 
             log = PdfImportLog.objects.create(
+                empresa=empresa,
                 filename=filename,
                 user=request.user,
                 status="PARCIAL",
             )
             try:
                 records_iter = _extractor.iter_records(content)
-                situacao = _get_or_create_situacao("Agendado")
-                result = bulk_import_records(records_iter, situacao, filename, pdf_import_log=log)
+                situacao = _get_or_create_situacao("Agendado", empresa=empresa)
+                result = bulk_import_records(
+                    records_iter, situacao, filename, pdf_import_log=log, empresa=empresa
+                )
             except ValueError as exc:
                 log.delete()
                 messages.error(request, str(exc))
@@ -105,7 +118,8 @@ def upload_pdf(request):
 
 @login_required
 def edit_pdf_log(request, pk):
-    log = get_object_or_404(PdfImportLog, pk=pk)
+    empresa = request.empresa
+    log = get_object_or_404(PdfImportLog.objects.for_empresa(empresa), pk=pk)
     periodo_choices = get_periodo_choices()
     periodo_atual = log.periodo.strftime("%Y-%m") if log.periodo else ""
 

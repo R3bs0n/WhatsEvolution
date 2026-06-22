@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-2">
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">{{ title }}</h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nome da campanha *</label>
+            <input type="text" name="nome" class="form-control" required
+                   placeholder="Ex: Promoção Exames Junho 2026"
+                   value="{{ request.GET.nome|default:'' }}">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Descrição</label>
+            <textarea name="descricao" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Segmento *</label>
+            <select name="segmento" class="form-select" required>
+              <option value="">— Selecionar —</option>
+              {% for s in segmentos %}
+              <option value="{{ s.pk }}"
+                {% if request.GET.segmento == s.pk|stringformat:"s" %}selected{% endif %}>
+                {{ s.nome }} ({{ s.total_contatos }} contatos)
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Template de mensagem</label>
+            <select name="template" class="form-select">
+              <option value="">— Usar padrão do sistema —</option>
+              {% for t in templates %}
+              <option value="{{ t.pk }}">{{ t.nome }} ({{ t.get_categoria_display }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Canal WhatsApp</label>
+            <select name="canal" class="form-select">
+              <option value="">— Canal padrão —</option>
+              {% for c in canais %}
+              <option value="{{ c.pk }}">{{ c.nome }} ({{ c.instance_name }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Agendar para</label>
+            <input type="datetime-local" name="agendado_para" class="form-control">
+            <div class="form-text">Deixe em branco para disparar manualmente.</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Salvar campanha</button>
+            <a href="{% url 'campanha-list' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

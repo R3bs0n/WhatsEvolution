@@ -31,6 +31,8 @@ urlpatterns = [
     path("whatsapp/", include("whatsapp.urls")),
     path("api/", include("core.api_urls")),
     path("webhook/", include("evolution.urls")),
+    path("empresas/", include("empresas.urls")),
+    path("campanhas/", include("campanhas.urls")),
     path("qr/<str:instance>/", qr_display, name="evolution-qr"),
     path("instancias/", instance_list, name="instance-list"),
     path("instancias/nova/", instance_create, name="instance-create"),

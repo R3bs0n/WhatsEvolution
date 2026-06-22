@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Campanha: {{ campanha.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">{{ campanha.nome }}</h4>
+    <span class="text-muted small">{{ campanha.segmento.nome }}</span>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'campanha-list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Voltar
+    </a>
+    {% if campanha.status in "rascunho,agendada" %}
+    <form method="post" action="{% url 'campanha-dispatch' campanha.pk %}"
+          onsubmit="return confirm('Confirma o disparo da campanha?')">
+      {% csrf_token %}
+      <button class="btn btn-sm btn-success">
+        <i class="bi bi-send-fill me-1"></i>Disparar agora
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Stats cards -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-3">
+    <div class="card text-center">
+      <div class="card-body py-3">
+        <div class="fs-4 fw-bold">{{ stats.total }}</div>
+        <div class="text-muted small">Total</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="card text-center border-success">
+      <div class="card-body py-3">
+        <div class="fs-4 fw-bold text-success">{{ stats.enviado }}</div>
+        <div class="text-muted small">Enviados</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="card text-center border-danger">
+      <div class="card-body py-3">
+        <div class="fs-4 fw-bold text-danger">{{ stats.falha }}</div>
+        <div class="text-muted small">Falhas</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-3">
+    <div class="card text-center border-warning">
+      <div class="card-body py-3">
+        <div class="fs-4 fw-bold text-warning">{{ stats.pendente }}</div>
+        <div class="text-muted small">Pendentes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detalhes -->
+<div class="card mb-3">
+  <div class="card-header fw-semibold">Configuração da campanha</div>
+  <div class="card-body row g-3 small">
+    <div class="col-sm-4">
+      <strong>Status:</strong>
+      <span class="ms-1">{{ campanha.get_status_display }}</span>
+    </div>
+    <div class="col-sm-4">
+      <strong>Template:</strong>
+      <span class="ms-1">{{ campanha.template.nome|default:"Padrão do sistema" }}</span>
+    </div>
+    <div class="col-sm-4">
+      <strong>Canal:</strong>
+      <span class="ms-1">{{ campanha.canal.nome|default:"Canal padrão" }}</span>
+    </div>
+    <div class="col-sm-4">
+      <strong>Agendado para:</strong>
+      <span class="ms-1">{{ campanha.agendado_para|date:"d/m/Y H:i"|default:"Manual" }}</span>
+    </div>
+    <div class="col-sm-4">
+      <strong>Criado por:</strong>
+      <span class="ms-1">{{ campanha.criado_por|default:"—" }}</span>
+    </div>
+    <div class="col-sm-4">
+      <strong>Criado em:</strong>
+      <span class="ms-1">{{ campanha.criado_em|date:"d/m/Y H:i" }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Destinatários -->
+<div class="card">
+  <div class="card-header fw-semibold">
+    Destinatários <span class="badge bg-secondary">{{ stats.total }}</span>
+    {% if stats.total > 100 %}
+    <span class="text-muted small ms-2">(exibindo os primeiros 100)</span>
+    {% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Nome</th><th>Telefone</th><th>Status</th><th>Erro</th></tr>
+      </thead>
+      <tbody>
+        {% for d in destinatarios %}
+        <tr>
+          <td>{{ d.nome_snapshot }}</td>
+          <td><code>{{ d.telefone_snapshot }}</code></td>
+          <td>
+            {% if d.status == "enviado" %}<span class="badge bg-success">Enviado</span>
+            {% elif d.status == "falha" %}<span class="badge bg-danger">Falha</span>
+            {% elif d.status == "processando" %}<span class="badge bg-primary">Processando</span>
+            {% elif d.status == "optout" %}<span class="badge bg-warning text-dark">Opt-out</span>
+            {% elif d.status == "invalido" %}<span class="badge bg-secondary">Inválido</span>
+            {% else %}<span class="badge bg-light text-dark">Pendente</span>
+            {% endif %}
+          </td>
+          <td class="text-danger small">{{ d.erro|default:"" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-center text-muted py-3">Nenhum destinatário materializado ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

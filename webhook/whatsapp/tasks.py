@@ -1,24 +1,27 @@
 import logging
+import uuid
 
 from celery import shared_task
 from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
-_DISPATCH_DELAY_SECONDS = 3  # gap between consecutive WhatsApp messages
+_DISPATCH_DELAY_SECONDS = 3
+
+
+def _get_configuracao(empresa=None):
+    """Retorna ConfiguracaoDisparo da empresa ou fallback para ConfiguracaoSistema global."""
+    from whatsapp.models import ConfiguracaoDisparo, ConfiguracaoSistema
+    if empresa is not None:
+        config = ConfiguracaoDisparo.objects.filter(empresa=empresa).first()
+        if config:
+            return config
+    return ConfiguracaoSistema.get()
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
 def dispatch_batch_after_import(self, atendimento_ids: list) -> dict:
-    """Schedule WhatsApp dispatch for a list of newly-imported Atendimento IDs.
-
-    Marks all eligible records as 'E' (enfileirado) in a single batch UPDATE,
-    then schedules individual send_whatsapp_for_atendimento tasks spaced
-    _DISPATCH_DELAY_SECONDS apart to respect WhatsApp rate limits.
-
-    Returns {"scheduled": N, "skipped": M} where skipped = IDs that were
-    already sent or not in status N.
-    """
+    """Enfileira e agenda envio WhatsApp para um lote de Atendimentos importados."""
     from atendimentos.models import Atendimento
 
     if not atendimento_ids:
@@ -51,74 +54,93 @@ def dispatch_batch_after_import(self, atendimento_ids: list) -> dict:
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
 def send_whatsapp_for_atendimento(self, atendimento_id: int) -> bool:
+    """
+    Envia uma mensagem WhatsApp para um Atendimento.
+
+    Padrão de duas transações:
+    - Tx1: valida + lock + marca PROCESSANDO + commit
+    - Chamada HTTP (fora de qualquer atomic())
+    - Tx2: grava resultado + atualiza status + commit
+    """
     from django.utils import timezone
     from atendimentos.models import Atendimento
     from whatsapp.models import ConfiguracaoSistema, EnvioWhatsAppLog
     from whatsapp.services.sender import WhatsAppSendService
 
-    config = ConfiguracaoSistema.get()
-    hoje = timezone.now().date()
-    enviados_hoje = EnvioWhatsAppLog.objects.filter(enviado_em__date=hoje, sucesso=True).count()
-    if enviados_hoje >= config.limite_diario_mensagens:
-        logger.warning(
-            "Limite diário de %d mensagens atingido. Atendimento %s marcado como 'Limitado'.",
-            config.limite_diario_mensagens,
-            atendimento_id,
-        )
-        from atendimentos.models import Atendimento
-        Atendimento.objects.filter(
-            pk=atendimento_id, status_enviado__in=["N", "E"]
-        ).update(status_enviado="L")
-        EnvioWhatsAppLog.objects.create(
-            atendimento_id=atendimento_id,
-            telefone="",
-            mensagem="",
-            status_retorno="LIMITE_DIARIO",
-            detalhe_retorno=f"Limite diário de {config.limite_diario_mensagens} mensagens atingido.",
-            sucesso=False,
-        )
-        return False
-
+    # === Tx1: validação e bloqueio ===
     try:
         with transaction.atomic():
-            # Aceita status "E" (Enfileirado) OU "N" (Não enviado) para
-            # garantir compatibilidade com registros enfileirados pela view
-            # e também com envios manuais diretos via admin.
-            # select_for_update(skip_locked=True) impede double-send sob
-            # concorrência de workers: se bloqueado, sai silenciosamente.
             atendimento = (
                 Atendimento.objects
                 .select_for_update(skip_locked=True)
                 .get(pk=atendimento_id, status_enviado__in=["N", "E"])
             )
-            service = WhatsAppSendService()
-            success = service.send_for_atendimento(atendimento)
+            empresa = atendimento.empresa
 
-            if not success:
-                # Reverte para "N" para permitir reenvio manual pelo operador.
-                # Casos como BLOQUEADO e TELEFONE_INVALIDO também voltam para "N"
-                # — o operador vê o motivo no log e decide o que fazer.
+            config = _get_configuracao(empresa)
+            hoje = timezone.now().date()
+
+            # Contagem de envios do dia para esta empresa (ou global se sem empresa)
+            enviados_qs = EnvioWhatsAppLog.objects.filter(enviado_em__date=hoje, sucesso=True)
+            if empresa is not None:
+                enviados_qs = enviados_qs.filter(empresa=empresa)
+            enviados_hoje = enviados_qs.count()
+
+            limite = config.limite_diario_mensagens
+            if enviados_hoje >= limite:
                 Atendimento.objects.filter(
-                    pk=atendimento_id, status_enviado="E"
-                ).update(status_enviado="N")
+                    pk=atendimento_id, status_enviado__in=["N", "E"]
+                ).update(status_enviado="L")
+                EnvioWhatsAppLog.objects.create(
+                    empresa=empresa,
+                    atendimento_id=atendimento_id,
+                    telefone="",
+                    mensagem="",
+                    status_retorno="LIMITE_DIARIO",
+                    detalhe_retorno=f"Limite diário de {limite} mensagens atingido.",
+                    sucesso=False,
+                )
+                logger.warning(
+                    "Limite diário atingido (empresa=%s, atendimento=%s).",
+                    empresa, atendimento_id,
+                )
+                return False
 
-        logger.info("Atendimento %s — %s", atendimento_id, "OK" if success else "FALHA")
-        return success
+            # Captura dados necessários antes de sair da Tx1
+            atendimento_snapshot = {
+                "pk": atendimento.pk,
+                "paciente": atendimento.paciente,
+                "telefone": atendimento.telefone,
+                "exame_procedimento": atendimento.exame_procedimento,
+                "empresa_id": empresa.pk if empresa else None,
+            }
 
     except Atendimento.DoesNotExist:
-        # Já enviado, não existe, ou bloqueado por outro worker (skip_locked)
         logger.info("Atendimento %s ignorado (não encontrado, já enviado ou bloqueado).", atendimento_id)
         return True
 
+    # === Chamada HTTP — fora de qualquer transação ===
+    try:
+        service = WhatsAppSendService()
+        atendimento_obj = Atendimento.objects.get(pk=atendimento_id)
+        success = service.send_for_atendimento(atendimento_obj)
     except Exception as exc:
-        logger.error("Erro ao enviar atendimento %s: %s", atendimento_id, exc)
-        # Reverte para "N" se esgotar as tentativas, para não ficar preso em "E"
+        logger.error("Erro HTTP ao enviar atendimento %s: %s", atendimento_id, exc)
         if self.request.retries >= self.max_retries:
-            try:
-                Atendimento.objects.filter(pk=atendimento_id, status_enviado="E").update(
-                    status_enviado="N"
-                )
-                logger.warning("Atendimento %s revertido para 'N' após %s tentativas.", atendimento_id, self.max_retries)
-            except Exception:
-                pass
+            Atendimento.objects.filter(pk=atendimento_id, status_enviado="E").update(
+                status_enviado="N"
+            )
         raise self.retry(exc=exc)
+
+    # === Tx2: grava resultado ===
+    try:
+        with transaction.atomic():
+            if not success:
+                Atendimento.objects.filter(
+                    pk=atendimento_id, status_enviado="E"
+                ).update(status_enviado="N")
+    except Exception as exc:
+        logger.error("Erro ao salvar resultado da Tx2 (atendimento=%s): %s", atendimento_id, exc)
+
+    logger.info("Atendimento %s — %s", atendimento_id, "OK" if success else "FALHA")
+    return success

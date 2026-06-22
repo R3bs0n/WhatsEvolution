@@ -16,6 +16,7 @@ def dashboard(request):
     from pdf_import.models import PdfImportLog
     from whatsapp.models import ConfiguracaoSistema, EnvioWhatsAppLog
 
+    empresa = request.empresa
     today = timezone.localdate()
 
     # Period filter
@@ -29,7 +30,7 @@ def dashboard(request):
             periodo_date = None
 
     periodos_disponiveis = (
-        PdfImportLog.objects
+        PdfImportLog.objects.for_empresa(empresa)
         .filter(periodo__isnull=False)
         .values_list("periodo", flat=True)
         .distinct()
@@ -41,7 +42,7 @@ def dashboard(request):
     ]
 
     # Summary cards (affected by period filter)
-    qs = Atendimento.objects
+    qs = Atendimento.objects.for_empresa(empresa)
     if periodo_date:
         qs = qs.filter(pdf_import__periodo=periodo_date)
 
@@ -50,17 +51,17 @@ def dashboard(request):
     nao_enviados = qs.filter(status_enviado="N").count()
     limitados = qs.filter(status_enviado="L").count()
 
-    falhas_qs = EnvioWhatsAppLog.objects.filter(sucesso=False)
+    falhas_qs = EnvioWhatsAppLog.objects.for_empresa(empresa).filter(sucesso=False)
     if periodo_date:
         falhas_qs = falhas_qs.filter(atendimento__pdf_import__periodo=periodo_date)
     falhas = falhas_qs.count()
 
-    # Today / month — always global (not filtered by period)
-    importados_hoje = Atendimento.objects.filter(criado_em__date=today).count()
-    mensagens_hoje = EnvioWhatsAppLog.objects.filter(
+    # Today / month
+    importados_hoje = Atendimento.objects.for_empresa(empresa).filter(criado_em__date=today).count()
+    mensagens_hoje = EnvioWhatsAppLog.objects.for_empresa(empresa).filter(
         enviado_em__date=today, sucesso=True
     ).count()
-    mensagens_mes = Atendimento.objects.filter(
+    mensagens_mes = Atendimento.objects.for_empresa(empresa).filter(
         status_enviado="S",
         data_envio__year=today.year,
         data_envio__month=today.month,

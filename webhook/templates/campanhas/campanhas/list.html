@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Campanhas{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Campanhas <span class="badge bg-secondary">{{ total_count }}</span></h4>
+  <a href="{% url 'campanha-create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Nova Campanha
+  </a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nome</th>
+          <th>Segmento</th>
+          <th>Status</th>
+          <th>Agendada para</th>
+          <th>Criada em</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in page_obj %}
+        <tr>
+          <td><strong>{{ c.nome }}</strong></td>
+          <td>{{ c.segmento.nome }}</td>
+          <td>
+            {% if c.status == "rascunho" %}<span class="badge bg-secondary">Rascunho</span>
+            {% elif c.status == "agendada" %}<span class="badge bg-warning text-dark">Agendada</span>
+            {% elif c.status == "em_andamento" %}<span class="badge bg-primary">Em andamento</span>
+            {% elif c.status == "concluida" %}<span class="badge bg-success">Concluída</span>
+            {% elif c.status == "pausada" %}<span class="badge bg-warning text-dark">Pausada</span>
+            {% elif c.status == "cancelada" %}<span class="badge bg-danger">Cancelada</span>
+            {% endif %}
+          </td>
+          <td class="text-muted small">{{ c.agendado_para|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td class="text-muted small">{{ c.criado_em|date:"d/m/Y" }}</td>
+          <td>
+            <a href="{% url 'campanha-detail' c.pk %}" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">Nenhuma campanha criada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+    {% if page_obj.has_next %}
+    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

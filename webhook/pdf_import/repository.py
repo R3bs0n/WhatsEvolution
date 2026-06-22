@@ -1,12 +1,3 @@
-"""Bulk persistence layer for Atendimento records extracted from PDFs.
-
-Replaces the N+1 anti-pattern (1 SELECT + 1 INSERT per record) with batch
-operations: 1 SELECT + 1 INSERT per BATCH_SIZE records.
-
-For an 800-page PDF with 2 000 records and BATCH_SIZE=500:
-  Old: 2 000 * 2 = 4 000 DB round-trips
-  New: 4 * 2    =     8 DB round-trips
-"""
 from __future__ import annotations
 
 import logging
@@ -73,15 +64,11 @@ def _process_batch(
     filename: str,
     now,
     pdf_import_log=None,
+    empresa=None,
 ) -> tuple[int, int]:
-    """Dedup within batch, check DB once, bulk_create new records.
-
-    Returns (inserted, ignored).
-    """
     if not batch:
         return 0, 0
 
-    # Step 1: parse dates, deduplicate within the batch (in-memory)
     parsed: list[tuple[ExtractedRecord, date | None, time | None]] = [
         (rec, _parse_date(rec.data_agendamento_raw), _parse_time(rec.horario_agendamento_raw))
         for rec in batch
@@ -97,10 +84,10 @@ def _process_batch(
 
     intra_dupes = len(batch) - len(unique)
 
-    # Step 2: one SELECT to find all existing records by phone in this batch
     telefones = [rec.telefone for rec, _, _ in unique]
+    base_qs = Atendimento.objects.for_empresa(empresa) if empresa is not None else Atendimento.objects
     existing_qs = (
-        Atendimento.objects
+        base_qs
         .filter(telefone__in=telefones)
         .values_list("telefone", "paciente", "exame_procedimento", "data_agendamento")
     )
@@ -109,7 +96,6 @@ def _process_batch(
         for t, p, e, d in existing_qs
     }
 
-    # Step 3: filter out existing records
     to_create: list[Atendimento] = []
     ignored_db = 0
     for rec, data_agend, horario in unique:
@@ -123,6 +109,7 @@ def _process_batch(
             ignored_db += 1
             continue
         to_create.append(Atendimento(
+            empresa=empresa,
             situacao=situacao,
             paciente=rec.paciente,
             telefone=rec.telefone,
@@ -136,7 +123,6 @@ def _process_batch(
             status_enviado="N",
         ))
 
-    # Step 4: one INSERT for the whole filtered batch
     inserted = 0
     if to_create:
         with transaction.atomic():
@@ -155,8 +141,8 @@ def bulk_import_records(
     situacao: SituacaoAtendimento,
     filename: str,
     pdf_import_log=None,
+    empresa=None,
 ) -> ImportResult:
-    """Import records from the extractor generator using bulk DB operations."""
     now = timezone.now()
     total_extraidos = 0
     total_inseridos = 0
@@ -173,14 +159,13 @@ def bulk_import_records(
         batch.append(rec)
 
         if len(batch) >= BATCH_SIZE:
-            ins, ign = _process_batch(batch, situacao, filename, now, pdf_import_log)
+            ins, ign = _process_batch(batch, situacao, filename, now, pdf_import_log, empresa)
             total_inseridos += ins
             total_ignorados += ign
             batch.clear()
 
-    # Flush remaining records
     if batch:
-        ins, ign = _process_batch(batch, situacao, filename, now, pdf_import_log)
+        ins, ign = _process_batch(batch, situacao, filename, now, pdf_import_log, empresa)
         total_inseridos += ins
         total_ignorados += ign
 

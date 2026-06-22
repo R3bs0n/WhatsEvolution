@@ -27,9 +27,25 @@
 <nav class="navbar navbar-dark py-2" style="background:#0f1e38">
   <div class="container-fluid">
     <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}">
-      <i class="bi bi-hospital-fill me-2"></i>Disparos Clínica
+      <i class="bi bi-hospital-fill me-2"></i>
+      {% if request.empresa %}{{ request.empresa.nome }}{% else %}Disparos Clínica{% endif %}
     </a>
     <div class="d-flex align-items-center gap-3">
+      {% if request.user.is_superuser %}
+        {% if request.empresa %}
+          <a href="{% url 'selecionar-empresa' %}"
+             class="btn btn-sm btn-warning text-dark d-none d-md-inline-flex align-items-center gap-1">
+            <i class="bi bi-building"></i>
+            <span>{{ request.empresa.nome }}</span>
+            <i class="bi bi-chevron-down"></i>
+          </a>
+        {% else %}
+          <a href="{% url 'selecionar-empresa' %}"
+             class="btn btn-sm btn-outline-warning d-none d-md-inline-flex align-items-center gap-1">
+            <i class="bi bi-building"></i>Selecionar empresa
+          </a>
+        {% endif %}
+      {% endif %}
       <span class="text-white-50 small d-none d-md-inline">
         <i class="bi bi-person-circle me-1"></i>{{ request.user.get_full_name|default:request.user.username }}
       </span>
@@ -68,6 +84,19 @@
       <a class="nav-link {% if request.resolver_match.url_name == 'whatsapp-optout' %}active{% endif %}"
          href="{% url 'whatsapp-optout' %}">
         <i class="bi bi-slash-circle me-2"></i>Bloqueados (Opt-out)
+      </a>
+      <div class="nav-section mt-2">Campanhas</div>
+      <a class="nav-link {% if 'campanha-list' in request.resolver_match.url_name|default:'' or 'campanha-create' in request.resolver_match.url_name|default:'' or 'campanha-detail' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+         href="{% url 'campanha-list' %}">
+        <i class="bi bi-megaphone-fill me-2"></i>Campanhas
+      </a>
+      <a class="nav-link {% if 'campanha-contato' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+         href="{% url 'campanha-contato-list' %}">
+        <i class="bi bi-person-lines-fill me-2"></i>Contatos
+      </a>
+      <a class="nav-link {% if 'campanha-segmento' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+         href="{% url 'campanha-segmento-list' %}">
+        <i class="bi bi-collection-fill me-2"></i>Segmentos
       </a>
       {% if user.is_staff %}
       <div class="nav-section mt-2">Admin</div>

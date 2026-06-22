@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Importar Contatos (CSV){% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-2">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">Importar Contatos via CSV</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          O arquivo CSV deve conter as colunas: <strong>nome</strong>, <strong>telefone</strong>
+          (obrigatórios), e opcionalmente <strong>email</strong> e <strong>tags</strong>
+          (separadas por vírgula dentro da célula).
+        </p>
+
+        <div class="alert alert-light border small mb-4">
+          <strong>Exemplo de cabeçalho:</strong><br>
+          <code>nome,telefone,email,tags</code><br>
+          <code>João Silva,5511999990000,joao@email.com,"vip,novo"</code>
+        </div>
+
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Arquivo CSV</label>
+            <input type="file" name="arquivo" accept=".csv,.txt" class="form-control" required>
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-upload me-1"></i>Importar
+            </button>
+            <a href="{% url 'campanha-contato-list' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

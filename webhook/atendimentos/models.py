@@ -1,8 +1,16 @@
 from django.db import models
 
+from core.managers import TenantManager
+
 
 class StatusAtendimento(models.Model):
-    nome = models.CharField(max_length=50, unique=True)
+    empresa = models.ForeignKey(
+        "empresas.Empresa", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="status_atendimento",
+    )
+    nome = models.CharField(max_length=50)
+
+    objects = TenantManager()
 
     class Meta:
         verbose_name = "Status do atendimento"
@@ -15,8 +23,14 @@ class StatusAtendimento(models.Model):
 
 
 class SituacaoAtendimento(models.Model):
-    nome = models.CharField(max_length=100, unique=True)
+    empresa = models.ForeignKey(
+        "empresas.Empresa", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="situacoes_atendimento",
+    )
+    nome = models.CharField(max_length=100)
     ativo = models.BooleanField(default=True, db_index=True)
+
+    objects = TenantManager()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -77,7 +91,14 @@ class Atendimento(models.Model):
         related_name="atendimentos",
         verbose_name="Importação PDF",
     )
+    empresa = models.ForeignKey(
+        "empresas.Empresa", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="atendimentos",
+        verbose_name="Empresa",
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
+
+    objects = TenantManager()
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:

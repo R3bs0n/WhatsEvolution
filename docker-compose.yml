@@ -91,6 +91,28 @@ services:
     networks:
       - evo-network
 
+  # Serviço de migration — usa MIGRATE_ROLE (BYPASSRLS) para aplicar migrations
+  # sem interferência das políticas RLS.
+  # Uso: docker compose run --rm migrate
+  migrate:
+    build:
+      context: ./webhook
+      dockerfile: Dockerfile
+    container_name: evolution_migrate
+    command: python manage.py migrate --noinput
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=${MIGRATE_ROLE_USER:-${POSTGRES_USER}}
+      - POSTGRES_PASSWORD=${MIGRATE_ROLE_PASSWORD:-${POSTGRES_PASSWORD}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - evo-network
+    profiles:
+      - migrate
+
   celery-worker:
     build:
       context: ./webhook
@@ -197,6 +219,85 @@ services:
     networks:
       - evo-network
 
+  # ── Typebot ──────────────────────────────────────────────────────────────
+  typebot-db:
+    image: postgres:16-alpine
+    container_name: typebot_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: typebot
+      POSTGRES_USER: typebot
+      POSTGRES_PASSWORD: ${TYPEBOT_POSTGRES_PASSWORD}
+    volumes:
+      - typebot_db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U typebot -d typebot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - evo-network
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - evo-network
+
+  typebot-builder:
+    image: baptistearno/typebot-builder:latest
+    container_name: typebot_builder
+    restart: unless-stopped
+    depends_on:
+      typebot-db:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    ports:
+      - "3001:3000"
+    environment:
+      - DATABASE_URL=postgresql://typebot:${TYPEBOT_POSTGRES_PASSWORD}@typebot-db:5432/typebot
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3002
+      - ENCRYPTION_SECRET=${TYPEBOT_ENCRYPTION_SECRET}
+      - NEXTAUTH_SECRET=${TYPEBOT_NEXTAUTH_SECRET}
+      - DISABLE_SIGNUP=false
+      - ADMIN_EMAIL=washingtoncosta2721@gmail.com
+      - DEFAULT_WORKSPACE_PLAN=UNLIMITED
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_SECURE=false
+      - SMTP_USERNAME=mailhog
+      - SMTP_PASSWORD=mailhog
+      - SMTP_FROM=typebot@clinica.local
+      - NEXT_PUBLIC_SMTP_FROM=typebot@clinica.local
+    networks:
+      - evo-network
+
+  typebot-viewer:
+    image: baptistearno/typebot-viewer:latest
+    container_name: typebot_viewer
+    restart: unless-stopped
+    depends_on:
+      typebot-db:
+        condition: service_healthy
+    ports:
+      - "3002:3000"
+    environment:
+      - DATABASE_URL=postgresql://typebot:${TYPEBOT_POSTGRES_PASSWORD}@typebot-db:5432/typebot
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3002
+      - ENCRYPTION_SECRET=${TYPEBOT_ENCRYPTION_SECRET}
+      - NEXTAUTH_SECRET=${TYPEBOT_NEXTAUTH_SECRET}
+    networks:
+      - evo-network
+
 volumes:
   postgres_data:
   redis_data:
@@ -204,6 +305,7 @@ volumes:
   chatwoot_postgres_data:
   chatwoot_redis_data:
   chatwoot_storage:
+  typebot_db_data:
 
 networks:
   evo-network:

@@ -36,10 +36,13 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "core",
+    "empresas",
+    "billing",
     "atendimentos",
     "pdf_import",
     "whatsapp",
     "evolution",
+    "campanhas",
 ]
 
 MIDDLEWARE = [
@@ -51,6 +54,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.TenantMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"

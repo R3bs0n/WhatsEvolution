@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Segmento: {{ segmento.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h4 class="mb-0">{{ segmento.nome }}</h4>
+    {% if segmento.descricao %}
+    <p class="text-muted mb-0">{{ segmento.descricao }}</p>
+    {% endif %}
+  </div>
+  <a href="{% url 'campanha-segmento-list' %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Voltar
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">Contatos <span class="badge bg-primary">{{ contatos|length }}</span></span>
+    <a href="{% url 'campanha-create' %}?segmento={{ segmento.pk }}" class="btn btn-sm btn-success">
+      <i class="bi bi-megaphone me-1"></i>Criar campanha com este segmento
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Nome</th><th>Telefone</th><th>E-mail</th><th>Tags</th></tr>
+      </thead>
+      <tbody>
+        {% for c in contatos %}
+        <tr>
+          <td>{{ c.nome }}</td>
+          <td><code>{{ c.telefone }}</code></td>
+          <td>{{ c.email|default:"—" }}</td>
+          <td>{% for t in c.tags %}<span class="badge bg-light text-dark border me-1">{{ t }}</span>{% endfor %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="text-muted text-center py-3">Nenhum contato neste segmento.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

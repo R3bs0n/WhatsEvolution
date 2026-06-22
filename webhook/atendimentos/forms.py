@@ -25,8 +25,11 @@ class AtendimentoForm(forms.ModelForm):
             "observacao": forms.Textarea(attrs={"rows": 3}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, empresa=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["situacao"].queryset = SituacaoAtendimento.objects.filter(ativo=True)
+        situacoes = SituacaoAtendimento.objects.filter(ativo=True)
+        if empresa is not None:
+            situacoes = situacoes.filter(empresa=empresa)
+        self.fields["situacao"].queryset = situacoes
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")

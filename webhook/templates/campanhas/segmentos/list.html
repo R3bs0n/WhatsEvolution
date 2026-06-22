@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Segmentos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Segmentos</h4>
+  <a href="{% url 'campanha-segmento-create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Novo Segmento
+  </a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nome</th>
+          <th>Descrição</th>
+          <th>Contatos</th>
+          <th>Criado em</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in segmentos %}
+        <tr>
+          <td><strong>{{ s.nome }}</strong></td>
+          <td class="text-muted">{{ s.descricao|default:"—"|truncatechars:60 }}</td>
+          <td><span class="badge bg-primary">{{ s.total_contatos }}</span></td>
+          <td class="text-muted small">{{ s.criado_em|date:"d/m/Y" }}</td>
+          <td>
+            <a href="{% url 'campanha-segmento-detail' s.pk %}" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">Nenhum segmento criado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

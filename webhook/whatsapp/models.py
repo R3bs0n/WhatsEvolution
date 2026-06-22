@@ -1,16 +1,131 @@
 from django.db import models
 from django.utils import timezone
 
+from core.managers import TenantManager
+
+
+class CanalWhatsApp(models.Model):
+    empresa = models.ForeignKey(
+        "empresas.Empresa",
+        on_delete=models.CASCADE,
+        related_name="canais_whatsapp",
+        null=True,
+        blank=True,
+    )
+    nome = models.CharField(max_length=100)
+    instance_name = models.CharField(max_length=100, unique=True)
+    api_url = models.CharField(max_length=255, blank=True)
+    principal = models.BooleanField(default=False)
+    ativo = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Canal WhatsApp"
+        verbose_name_plural = "Canais WhatsApp"
+        ordering = ["empresa", "nome"]
+
+    def __str__(self):
+        return f"{self.nome} ({self.instance_name})"
+
+    def save(self, *args, **kwargs):
+        # Garante apenas um canal principal por empresa
+        if self.principal and self.empresa_id:
+            CanalWhatsApp.objects.filter(
+                empresa=self.empresa, principal=True
+            ).exclude(pk=self.pk).update(principal=False)
+        super().save(*args, **kwargs)
+
+
+class ConfiguracaoDisparo(models.Model):
+    empresa = models.OneToOneField(
+        "empresas.Empresa",
+        on_delete=models.CASCADE,
+        related_name="configuracao_disparo",
+        null=True,
+        blank=True,
+    )
+    limite_diario_mensagens = models.IntegerField(
+        default=1000, verbose_name="Limite diário de mensagens"
+    )
+    tamanho_lote = models.IntegerField(default=300, verbose_name="Tamanho do lote")
+    intervalo_segundos = models.IntegerField(
+        default=3, verbose_name="Intervalo entre envios (segundos)"
+    )
+    contato_url = models.CharField(max_length=255, blank=True)
+    privacy_policy_url = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Configuração de disparo"
+        verbose_name_plural = "Configurações de disparo"
+
+    def __str__(self):
+        empresa_nome = self.empresa.nome if self.empresa_id else "Global"
+        return f"Config disparo — {empresa_nome}"
+
+
+class TemplateMensagem(models.Model):
+    CATEGORIA_CHOICES = [
+        ("clinico", "Clínico"),
+        ("promocional", "Promocional"),
+        ("transacional", "Transacional"),
+    ]
+
+    empresa = models.ForeignKey(
+        "empresas.Empresa",
+        on_delete=models.CASCADE,
+        related_name="templates_mensagem",
+        null=True,
+        blank=True,
+    )
+    nome = models.CharField(max_length=100)
+    categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES, default="clinico")
+    corpo = models.TextField(help_text="Use {variavel} para campos dinâmicos")
+    variaveis_permitidas = models.JSONField(
+        default=list, blank=True,
+        help_text="Lista de nomes de variáveis esperadas, ex: ['nome_paciente', 'tipo_exame']"
+    )
+    ativo = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Template de mensagem"
+        verbose_name_plural = "Templates de mensagem"
+        ordering = ["empresa", "nome"]
+
+    def __str__(self):
+        return f"{self.nome} ({self.get_categoria_display()})"
+
+    def renderizar(self, variaveis: dict) -> str:
+        try:
+            return self.corpo.format(**variaveis)
+        except KeyError as e:
+            raise ValueError(f"Variável ausente no template: {e}") from e
+
 
 class ContatoBloqueado(models.Model):
-    telefone = models.CharField(max_length=30, unique=True)
+    empresa = models.ForeignKey(
+        "empresas.Empresa", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="contatos_bloqueados",
+    )
+    telefone = models.CharField(max_length=30)
     data_bloqueio = models.DateTimeField(auto_now_add=True)
+
+    objects = TenantManager()
 
     class Meta:
         ordering = ["-data_bloqueio"]
         verbose_name = "Contato bloqueado"
         verbose_name_plural = "Contatos bloqueados (opt-out)"
         db_table = "contatos_bloqueados"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["empresa", "telefone"],
+                name="uq_contato_bloqueado_empresa_telefone",
+            )
+        ]
 
     def __str__(self):
         return self.telefone
@@ -40,7 +155,122 @@ class ConfiguracaoSistema(models.Model):
         return obj
 
 
+class EnvioMensagem(models.Model):
+    STATUS_CHOICES = [
+        ("pendente", "Pendente"),
+        ("processando", "Processando"),
+        ("enviado", "Enviado"),
+        ("falha", "Falha"),
+        ("cancelado", "Cancelado"),
+    ]
+
+    empresa = models.ForeignKey(
+        "empresas.Empresa", on_delete=models.CASCADE,
+        related_name="envios_mensagem", null=True, blank=True,
+    )
+    canal = models.ForeignKey(
+        CanalWhatsApp, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name="envios",
+    )
+    telefone_snapshot = models.CharField(max_length=30)
+    conteudo_snapshot = models.TextField()
+    variaveis_snapshot = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pendente", db_index=True)
+    idempotency_key = models.CharField(max_length=64, unique=True)
+    external_message_id = models.CharField(max_length=100, blank=True, db_index=True)
+    tentativas = models.PositiveSmallIntegerField(default=0)
+    agendado_para = models.DateTimeField(null=True, blank=True, db_index=True)
+    enviado_em = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = TenantManager()
+
+    class Meta:
+        verbose_name = "Envio de mensagem"
+        verbose_name_plural = "Envios de mensagem"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.telefone_snapshot} — {self.status} ({self.created_at:%d/%m/%Y %H:%M})"
+
+
+class TentativaEnvio(models.Model):
+    STATUS_CHOICES = [
+        ("sucesso", "Sucesso"),
+        ("falha", "Falha"),
+        ("timeout", "Timeout"),
+    ]
+
+    envio = models.ForeignKey(
+        EnvioMensagem, on_delete=models.CASCADE, related_name="tentativas_envio"
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    resposta = models.JSONField(default=dict, blank=True)
+    tentado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Tentativa de envio"
+        verbose_name_plural = "Tentativas de envio"
+        ordering = ["-tentado_em"]
+
+    def __str__(self):
+        return f"Tentativa {self.pk} — {self.status} — {self.tentado_em:%d/%m/%Y %H:%M}"
+
+
+class EventoMensagem(models.Model):
+    TIPO_CHOICES = [
+        ("entregue", "Entregue"),
+        ("lido", "Lido"),
+        ("falhou", "Falhou"),
+        ("devolvido", "Devolvido"),
+        ("desconhecido", "Desconhecido"),
+    ]
+
+    envio = models.ForeignKey(
+        EnvioMensagem, on_delete=models.CASCADE, related_name="eventos"
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default="desconhecido", db_index=True)
+    payload = models.JSONField(default=dict, blank=True)
+    recebido_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Evento de mensagem"
+        verbose_name_plural = "Eventos de mensagem"
+        ordering = ["-recebido_em"]
+
+    def __str__(self):
+        return f"{self.tipo} — {self.recebido_em:%d/%m/%Y %H:%M}"
+
+
+class AtendimentoEnvio(models.Model):
+    """Bridge: vincula um Atendimento (clínico) a um EnvioMensagem (mensageria)."""
+
+    atendimento = models.OneToOneField(
+        "atendimentos.Atendimento",
+        on_delete=models.CASCADE,
+        related_name="envio_mensagem",
+    )
+    envio = models.OneToOneField(
+        EnvioMensagem,
+        on_delete=models.CASCADE,
+        related_name="atendimento_envio",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Envio de atendimento"
+        verbose_name_plural = "Envios de atendimento"
+
+    def __str__(self):
+        return f"Atendimento {self.atendimento_id} → Envio {self.envio_id}"
+
+
 class EnvioWhatsAppLog(models.Model):
+    empresa = models.ForeignKey(
+        "empresas.Empresa", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="envios_whatsapp",
+    )
     atendimento = models.ForeignKey(
         "atendimentos.Atendimento",
         on_delete=models.CASCADE,
@@ -53,6 +283,8 @@ class EnvioWhatsAppLog(models.Model):
     detalhe_retorno = models.TextField(blank=True)
     enviado_em = models.DateTimeField(default=timezone.now)
     sucesso = models.BooleanField(default=False)
+
+    objects = TenantManager()
 
     class Meta:
         ordering = ["-enviado_em"]
