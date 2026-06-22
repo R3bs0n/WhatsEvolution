@@ -98,8 +98,15 @@
          href="{% url 'campanha-segmento-list' %}">
         <i class="bi bi-collection-fill me-2"></i>Segmentos
       </a>
+      {% if user.is_superuser %}
+      <div class="nav-section mt-2">Administração</div>
+      <a class="nav-link {% if 'empresa' in request.resolver_match.url_name|default:'' %}active{% endif %}"
+         href="{% url 'empresa-list' %}">
+        <i class="bi bi-building me-2"></i>Empresas
+      </a>
+      {% endif %}
       {% if user.is_staff %}
-      <div class="nav-section mt-2">Admin</div>
+      <div class="nav-section mt-2">Sistema</div>
       <a class="nav-link {% if request.resolver_match.url_name == 'instance-list' %}active{% endif %}"
          href="{% url 'instance-list' %}">
         <i class="bi bi-phone-fill me-2"></i>Instâncias WhatsApp
