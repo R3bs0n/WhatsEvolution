@@ -51,7 +51,7 @@
   <div class="col-sm-3">
     <div class="card text-center">
       <div class="card-body py-3">
-        <div class="fs-4 fw-bold">{{ empresa.canais_whatsapp.count }}</div>
+        <div class="fs-4 fw-bold">{{ canais|length }}</div>
         <div class="text-muted small">Canais WhatsApp</div>
       </div>
     </div>
@@ -70,8 +70,8 @@
   </div>
 </div>
 
-<div class="row g-3">
-  <!-- Detalhes -->
+<div class="row g-3 mb-3">
+  <!-- Detalhes de branding -->
   <div class="col-md-5">
     <div class="card h-100">
       <div class="card-header fw-semibold">Configurações de branding</div>
@@ -141,4 +141,135 @@
     </div>
   </div>
 </div>
+
+<!-- Canais WhatsApp -->
+<div class="card">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-whatsapp me-2 text-success"></i>Canais WhatsApp</span>
+    <button class="btn btn-sm btn-outline-success" data-bs-toggle="collapse"
+            data-bs-target="#formNovoCanal" aria-expanded="false">
+      <i class="bi bi-plus-circle me-1"></i>Vincular canal
+    </button>
+  </div>
+
+  <!-- Formulário de adição (colapsável) -->
+  <div class="collapse" id="formNovoCanal">
+    <div class="card-body border-bottom bg-light">
+      <form method="post" action="{% url 'canal-create' empresa.pk %}">
+        {% csrf_token %}
+        <div class="row g-2 align-items-end">
+          <div class="col-sm-3">
+            <label class="form-label form-label-sm fw-semibold mb-1">Nome de exibição *</label>
+            <input type="text" name="nome" class="form-control form-control-sm"
+                   placeholder="Ex: WhatsApp Clínica" required>
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label form-label-sm fw-semibold mb-1">Instance Name *</label>
+            <input type="text" name="instance_name" class="form-control form-control-sm"
+                   placeholder="Ex: clinica-saude" required>
+            <div class="form-text" style="font-size:.7rem;">
+              Nome da instância criada na página "Instâncias WhatsApp"
+            </div>
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label form-label-sm fw-semibold mb-1">API URL</label>
+            <input type="url" name="api_url" class="form-control form-control-sm"
+                   placeholder="http://evolution-api:8080"
+                   value="http://evolution-api:8080">
+            <div class="form-text" style="font-size:.7rem;">Deixe o padrão se usar o mesmo servidor</div>
+          </div>
+          <div class="col-sm-2 d-flex align-items-center gap-2 mt-3">
+            <div class="form-check form-switch mt-1">
+              <input class="form-check-input" type="checkbox" name="principal" id="principal">
+              <label class="form-check-label small" for="principal">Principal</label>
+            </div>
+          </div>
+          <div class="col-sm-1 d-flex align-items-end">
+            <button type="submit" class="btn btn-success btn-sm w-100">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lista de canais -->
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Nome</th>
+          <th>Instance Name</th>
+          <th>API URL</th>
+          <th>Status</th>
+          <th>Principal</th>
+          <th class="text-end">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for canal in canais %}
+        <tr>
+          <td class="fw-semibold">{{ canal.nome }}</td>
+          <td><code class="small">{{ canal.instance_name }}</code></td>
+          <td class="text-muted small">{{ canal.api_url }}</td>
+          <td>
+            {% if canal.ativo %}
+              <span class="badge bg-success">Ativo</span>
+            {% else %}
+              <span class="badge bg-secondary">Inativo</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if canal.principal %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-star-fill me-1"></i>Principal</span>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-flex justify-content-end gap-1">
+              {% if not canal.principal %}
+              <form method="post" action="{% url 'canal-set-principal' empresa.pk canal.pk %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-xs btn-outline-warning" title="Definir como principal"
+                        style="padding:.2rem .5rem;font-size:.75rem;">
+                  <i class="bi bi-star"></i>
+                </button>
+              </form>
+              {% endif %}
+              <form method="post" action="{% url 'canal-toggle-ativo' empresa.pk canal.pk %}">
+                {% csrf_token %}
+                <button type="submit"
+                        class="btn btn-xs {% if canal.ativo %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
+                        title="{% if canal.ativo %}Desativar{% else %}Ativar{% endif %}"
+                        style="padding:.2rem .5rem;font-size:.75rem;">
+                  <i class="bi bi-{% if canal.ativo %}pause-circle{% else %}play-circle{% endif %}"></i>
+                </button>
+              </form>
+              <form method="post" action="{% url 'canal-delete' empresa.pk canal.pk %}"
+                    onsubmit="return confirm('Remover canal {{ canal.nome }}?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-xs btn-outline-danger" title="Remover"
+                        style="padding:.2rem .5rem;font-size:.75rem;">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="text-muted text-center py-4">
+            <i class="bi bi-whatsapp me-2 text-success"></i>
+            Nenhum canal vinculado.<br>
+            <small>Clique em "Vincular canal" para adicionar uma instância WhatsApp a esta empresa.</small>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {% endblock %}

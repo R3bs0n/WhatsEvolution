@@ -1,15 +1,14 @@
-from django.shortcuts import redirect
-from django.urls import reverse
+from django.db import connection
 
 
 class TenantMiddleware:
     """
-    Resolve qual empresa está ativa no request.
+    Resolve qual empresa está ativa no request e configura o contexto RLS no PostgreSQL.
 
     Lógica de resolução (ordem de precedência):
     1. Superadmin com sessão active_empresa_id → usa essa empresa
     2. Usuário comum com MembroEmpresa → usa a empresa do membro ativo
-    3. Sem empresa resolvida → redireciona para seletor (se logado) ou login
+    3. Sem empresa resolvida → request.empresa = None, tenant = '' (RLS bloqueia tudo)
     """
 
     def __init__(self, get_response):
@@ -21,7 +20,26 @@ class TenantMiddleware:
         if request.user.is_authenticated:
             request.empresa = self._resolve_empresa(request)
 
-        return self.get_response(request)
+        empresa_id = str(request.empresa.pk) if request.empresa else ''
+        self._set_pg_tenant(empresa_id)
+
+        try:
+            return self.get_response(request)
+        finally:
+            # Resetar ao final do request — evita vazamento entre requests
+            # no mesmo pool de conexão (CONN_MAX_AGE > 0).
+            self._set_pg_tenant('')
+
+    def _set_pg_tenant(self, empresa_id: str):
+        try:
+            with connection.cursor() as cursor:
+                # set_config(name, value, is_local=false) → sessão (não apenas transação)
+                cursor.execute(
+                    "SELECT set_config('app.current_tenant', %s, false)",
+                    [empresa_id],
+                )
+        except Exception:
+            pass  # Não quebrar o request se o DB estiver indisponível no startup
 
     def _resolve_empresa(self, request):
         from empresas.models import Empresa, MembroEmpresa
@@ -33,7 +51,8 @@ class TenantMiddleware:
             return None
 
         membro = (
-            MembroEmpresa.objects.select_related("empresa")
+            MembroEmpresa.objects
+            .select_related("empresa")
             .filter(usuario=request.user, ativo=True, empresa__ativo=True)
             .first()
         )

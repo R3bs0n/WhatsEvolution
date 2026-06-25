@@ -7,6 +7,10 @@ urlpatterns = [
     path("nova/", views.empresa_create, name="empresa-create"),
     path("<int:pk>/", views.empresa_detail, name="empresa-detail"),
     path("<int:pk>/editar/", views.empresa_edit, name="empresa-edit"),
+    path("<int:pk>/canais/adicionar/", views.canal_create, name="canal-create"),
+    path("<int:pk>/canais/<int:canal_pk>/principal/", views.canal_set_principal, name="canal-set-principal"),
+    path("<int:pk>/canais/<int:canal_pk>/toggle/", views.canal_toggle_ativo, name="canal-toggle-ativo"),
+    path("<int:pk>/canais/<int:canal_pk>/remover/", views.canal_delete, name="canal-delete"),
     path("selecionar/", views.selecionar_empresa, name="selecionar-empresa"),
     path("sair/", views.sair_empresa, name="sair-empresa"),
 ]

@@ -13,10 +13,10 @@ $$ LANGUAGE sql STABLE;
 -- ── TABELAS OPERACIONAIS ──────────────────────────────────────────────────────
 
 -- atendimentos
-ALTER TABLE atendimentos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atendimentos FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON atendimentos;
-CREATE POLICY tenant_isolation ON atendimentos
+ALTER TABLE atendimentos_atendimento ENABLE ROW LEVEL SECURITY;
+ALTER TABLE atendimentos_atendimento FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON atendimentos_atendimento;
+CREATE POLICY tenant_isolation ON atendimentos_atendimento
     USING (empresa_id = current_empresa_id())
     WITH CHECK (empresa_id = current_empresa_id());
 
