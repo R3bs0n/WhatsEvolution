@@ -35,7 +35,7 @@ def _require_superuser(view_func):
     return _wrapped
 
 
-def _validate_webhook_secret(request) -> bool:
+def _validate_webhook_secret(request, webhook_token: str | None = None) -> bool:
     from django.conf import settings
 
     secret = getattr(settings, "EVOLUTION_WEBHOOK_SECRET", "")
@@ -48,11 +48,14 @@ def _validate_webhook_secret(request) -> bool:
         logger.error("EVOLUTION_WEBHOOK_SECRET nao configurado; webhook rejeitado.")
         return False
 
-    provided = _provided_webhook_secret(request)
+    provided = _provided_webhook_secret(request, webhook_token)
     return hmac.compare_digest(provided, secret)
 
 
-def _provided_webhook_secret(request) -> str:
+def _provided_webhook_secret(request, webhook_token: str | None = None) -> str:
+    if webhook_token:
+        return webhook_token
+
     provided = request.headers.get("apikey", "")
     if provided:
         return provided
@@ -89,11 +92,11 @@ def _resolve_empresa_by_instance(inst: str):
 
 
 @csrf_exempt
-def webhook_receiver(request, instance=None):
+def webhook_receiver(request, instance=None, webhook_token=None):
     if request.method != "POST":
         return JsonResponse({"error": "method not allowed"}, status=405)
 
-    if not _validate_webhook_secret(request):
+    if not _validate_webhook_secret(request, webhook_token):
         logger.warning("Webhook recebido com secret invalido (ip=%s)", request.META.get("REMOTE_ADDR"))
         return JsonResponse({"error": "unauthorized"}, status=401)
 

@@ -107,6 +107,7 @@ CELERY_BROKER_URL=redis://redis:6379/0
 ```
 
 `EVOLUTION_WEBHOOK_SECRET` deve estar preenchido em producao. Se estiver vazio e `DEBUG=False`, o webhook rejeita os eventos.
+No `docker-compose.yml`, a Evolution envia webhooks para `/webhook/token/${EVOLUTION_WEBHOOK_SECRET}/`, pois a configuracao global da Evolution v2.2.3 usada neste projeto nao expoe header customizado para webhook global.
 
 `BILLING_GRACE_MODE=True` preserva o comportamento atual: empresas sem assinatura cadastrada ainda podem disparar. Para cobranca ativa em producao, cadastre as assinaturas e use `BILLING_GRACE_MODE=False`.
 
@@ -130,7 +131,7 @@ Fluxo generico:
 ## Seguranca
 
 - Dados operacionais devem ter `empresa_id` obrigatorio.
-- Webhook Evolution exige `EVOLUTION_WEBHOOK_SECRET` fora de `DEBUG`.
+- Webhook Evolution exige `EVOLUTION_WEBHOOK_SECRET` fora de `DEBUG`; o segredo pode ser validado por token de rota, header `apikey` ou campo JSON `apikey`.
 - Painel `/instancias/` exige superuser.
 - Admin operacional usa escopo por tenant; modelos globais/sensiveis exigem superuser.
 - `db/rls_policies.sql` inclui a funcao `resolve_canal_by_instance()` com `SECURITY DEFINER`, `search_path` fixo e `EXECUTE` restrito a `app_role`.

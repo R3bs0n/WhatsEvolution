@@ -32,6 +32,17 @@ def _post_body_secret(view, payload, instance=None):
     return view(request, instance=instance)
 
 
+def _post_route_secret(view, payload, token="test-secret"):
+    factory = RequestFactory()
+    body = json.dumps(payload).encode()
+    request = factory.post(
+        f"/webhook/token/{token}/",
+        data=body,
+        content_type="application/json",
+    )
+    return view(request, webhook_token=token)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Basic routing
 # ──────────────────────────────────────────────────────────────────────────────
@@ -58,6 +69,13 @@ class WebhookReceiverMethodTest(TestCase):
                 "data": {},
                 "apikey": "test-secret",
             },
+        )
+        assert response.status_code == 200
+
+    def test_post_accepts_secret_from_route_token(self):
+        response = _post_route_secret(
+            webhook_receiver,
+            {"event": "UNKNOWN", "instance": "test", "data": {}},
         )
         assert response.status_code == 200
 
