@@ -48,8 +48,22 @@ def _validate_webhook_secret(request) -> bool:
         logger.error("EVOLUTION_WEBHOOK_SECRET nao configurado; webhook rejeitado.")
         return False
 
-    provided = request.headers.get("apikey", "")
+    provided = _provided_webhook_secret(request)
     return hmac.compare_digest(provided, secret)
+
+
+def _provided_webhook_secret(request) -> str:
+    provided = request.headers.get("apikey", "")
+    if provided:
+        return provided
+
+    try:
+        payload = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return ""
+
+    provided = payload.get("apikey", "")
+    return provided if isinstance(provided, str) else ""
 
 
 def _resolve_empresa_by_instance(inst: str):

@@ -21,6 +21,17 @@ def _post(view, payload, instance=None):
     return view(request, instance=instance)
 
 
+def _post_body_secret(view, payload, instance=None):
+    factory = RequestFactory()
+    body = json.dumps(payload).encode()
+    request = factory.post(
+        "/webhook/",
+        data=body,
+        content_type="application/json",
+    )
+    return view(request, instance=instance)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Basic routing
 # ──────────────────────────────────────────────────────────────────────────────
@@ -37,6 +48,18 @@ class WebhookReceiverMethodTest(TestCase):
         response = _post(webhook_receiver, {"event": "UNKNOWN", "instance": "test", "data": {}})
         assert response.status_code == 200
         assert json.loads(response.content) == {"status": "received"}
+
+    def test_post_accepts_secret_from_json_payload(self):
+        response = _post_body_secret(
+            webhook_receiver,
+            {
+                "event": "UNKNOWN",
+                "instance": "test",
+                "data": {},
+                "apikey": "test-secret",
+            },
+        )
+        assert response.status_code == 200
 
     def test_post_with_invalid_json_returns_400(self):
         factory = RequestFactory()
