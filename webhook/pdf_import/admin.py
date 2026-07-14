@@ -1,11 +1,13 @@
 from django.contrib import admin
 
+from core.admin import TenantAdminMixin
+
 from .models import PdfImportLog
 
 
 @admin.register(PdfImportLog)
-class PdfImportLogAdmin(admin.ModelAdmin):
-    list_display = ("filename", "user", "total_inseridos", "total_ignorados", "status", "created_at")
-    list_filter = ("status", "created_at")
+class PdfImportLogAdmin(TenantAdminMixin, admin.ModelAdmin):
+    list_display = ("filename", "empresa", "user", "total_inseridos", "total_ignorados", "status", "created_at")
+    list_filter = ("status", "empresa", "created_at")
     search_fields = ("filename",)
     readonly_fields = ("created_at", "updated_at")

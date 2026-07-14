@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from core.admin import SuperuserOnlyAdminMixin
+
 from .models import Empresa, MembroEmpresa
 
 
@@ -10,7 +12,7 @@ class MembroEmpresaInline(admin.TabularInline):
 
 
 @admin.register(Empresa)
-class EmpresaAdmin(admin.ModelAdmin):
+class EmpresaAdmin(SuperuserOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("nome", "slug", "segmento", "ativo", "created_at")
     list_filter = ("ativo", "tema")
     search_fields = ("nome", "slug", "segmento")
@@ -23,7 +25,7 @@ class EmpresaAdmin(admin.ModelAdmin):
 
 
 @admin.register(MembroEmpresa)
-class MembroEmpresaAdmin(admin.ModelAdmin):
+class MembroEmpresaAdmin(SuperuserOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("usuario", "empresa", "papel", "ativo", "criado_em")
     list_filter = ("papel", "ativo", "empresa")
     search_fields = ("usuario__username", "empresa__nome")

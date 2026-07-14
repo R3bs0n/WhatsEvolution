@@ -1,25 +1,27 @@
 from django.contrib import admin
 
+from core.admin import TenantAdminMixin
+
 from .models import Atendimento, SituacaoAtendimento, StatusAtendimento
 
 
 @admin.register(StatusAtendimento)
-class StatusAtendimentoAdmin(admin.ModelAdmin):
-    list_display = ("nome",)
+class StatusAtendimentoAdmin(TenantAdminMixin, admin.ModelAdmin):
+    list_display = ("nome", "empresa")
     search_fields = ("nome",)
 
 
 @admin.register(SituacaoAtendimento)
-class SituacaoAtendimentoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "ativo", "created_at")
+class SituacaoAtendimentoAdmin(TenantAdminMixin, admin.ModelAdmin):
+    list_display = ("nome", "empresa", "ativo", "created_at")
     list_filter = ("ativo",)
     search_fields = ("nome",)
 
 
 @admin.register(Atendimento)
-class AtendimentoAdmin(admin.ModelAdmin):
+class AtendimentoAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = (
-        "paciente", "exame_procedimento", "telefone",
+        "paciente", "empresa", "exame_procedimento", "telefone",
         "data_agendamento", "status_atendimento", "status_enviado", "criado_em",
     )
     list_filter = ("status_enviado", "status_atendimento", "situacao", "data_agendamento")

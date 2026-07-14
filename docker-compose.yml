@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.evolution
-    image: evolution-api-custom:latest
+    image: evolution-api-custom:baileys-6.7.23-wa-2.3000.1035194821
     container_name: evolution_api
     restart: unless-stopped
     ports:
@@ -95,8 +95,7 @@ services:
     networks:
       - evo-network
 
-  # Serviço de migration — usa MIGRATE_ROLE (BYPASSRLS) para aplicar migrations
-  # sem interferência das políticas RLS.
+  # Serviço de migration — usa o superuser (evolution) que tem DDL + BYPASSRLS.
   # Uso: docker compose run --rm migrate
   migrate:
     build:
@@ -107,8 +106,9 @@ services:
     env_file:
       - .env
     environment:
-      - POSTGRES_USER=${MIGRATE_ROLE_USER:-${POSTGRES_USER}}
-      - POSTGRES_PASSWORD=${MIGRATE_ROLE_PASSWORD:-${POSTGRES_PASSWORD}}
+      # Migrations precisam de DDL (CREATE TABLE) — usa superuser, não app_role
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
@@ -171,7 +171,7 @@ services:
       - evo-network
 
   chatwoot:
-    image: chatwoot/chatwoot:latest
+    image: chatwoot/chatwoot@sha256:09de1952d6261bc2dee9235c52f67e10f67d9f4bf566072aba920ac588aca5c3
     container_name: chatwoot
     restart: unless-stopped
     depends_on:
@@ -201,7 +201,7 @@ services:
       - evo-network
 
   chatwoot-sidekiq:
-    image: chatwoot/chatwoot:latest
+    image: chatwoot/chatwoot@sha256:09de1952d6261bc2dee9235c52f67e10f67d9f4bf566072aba920ac588aca5c3
     container_name: chatwoot_sidekiq
     restart: unless-stopped
     depends_on:
@@ -249,7 +249,7 @@ services:
       - evo-network
 
   mailhog:
-    image: mailhog/mailhog:latest
+    image: mailhog/mailhog@sha256:8d76a3d4ffa32a3661311944007a415332c4bb855657f4f6c57996405c009bea
     container_name: mailhog
     restart: unless-stopped
     ports:
@@ -259,7 +259,7 @@ services:
       - evo-network
 
   typebot-builder:
-    image: baptistearno/typebot-builder:latest
+    image: baptistearno/typebot-builder@sha256:a67edf944eb64e885a3660d8bbd11102b9d468d31dbf4b7f6170e4cd2ceaa9d3
     container_name: typebot_builder
     restart: unless-stopped
     depends_on:
@@ -289,7 +289,7 @@ services:
       - evo-network
 
   typebot-viewer:
-    image: baptistearno/typebot-viewer:latest
+    image: baptistearno/typebot-viewer@sha256:70f1dd949f2246432650cfda082c01e45089fb129369ceee6632d57b9c5f2b7e
     container_name: typebot_viewer
     restart: unless-stopped
     depends_on:

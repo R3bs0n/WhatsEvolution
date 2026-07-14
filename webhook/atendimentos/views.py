@@ -11,6 +11,8 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from core.decorators import empresa_required
+
 from .forms import AtendimentoForm
 from .models import Atendimento, StatusAtendimento
 
@@ -20,6 +22,7 @@ _MSG_DELAY_SECONDS = 3
 
 
 @login_required
+@empresa_required
 def atendimento_list(request):
     empresa = request.empresa
     qs = (
@@ -73,6 +76,7 @@ def atendimento_list(request):
 
 @login_required
 @require_POST
+@empresa_required
 def atendimento_update_status(request, pk):
     empresa = request.empresa
     obj = get_object_or_404(Atendimento.objects.for_empresa(empresa), pk=pk)
@@ -91,6 +95,7 @@ def atendimento_update_status(request, pk):
 
 
 @login_required
+@empresa_required
 def atendimento_create(request):
     empresa = request.empresa
     if request.method == "POST":
@@ -107,6 +112,7 @@ def atendimento_create(request):
 
 
 @login_required
+@empresa_required
 def atendimento_update(request, pk):
     empresa = request.empresa
     obj = get_object_or_404(Atendimento.objects.for_empresa(empresa), pk=pk)
@@ -122,6 +128,7 @@ def atendimento_update(request, pk):
 
 
 @login_required
+@empresa_required
 def atendimento_detail(request, pk):
     empresa = request.empresa
     obj = get_object_or_404(
@@ -132,6 +139,7 @@ def atendimento_detail(request, pk):
 
 
 @login_required
+@empresa_required
 def atendimento_delete(request, pk):
     empresa = request.empresa
     obj = get_object_or_404(Atendimento.objects.for_empresa(empresa), pk=pk)
@@ -143,6 +151,7 @@ def atendimento_delete(request, pk):
 
 
 @login_required
+@empresa_required
 def atendimento_dispatch(request):
     if request.method != "POST":
         return redirect("atendimento-list")
@@ -159,7 +168,13 @@ def atendimento_dispatch(request):
         messages.error(request, "Seleção inválida.")
         return redirect("atendimento-list")
 
+    from billing.utils import empresa_pode_disparar
     from whatsapp.tasks import send_whatsapp_for_atendimento
+
+    pode, motivo = empresa_pode_disparar(empresa)
+    if not pode:
+        messages.error(request, motivo)
+        return redirect("atendimento-list")
 
     with transaction.atomic():
         if force == "all":
@@ -181,9 +196,10 @@ def atendimento_dispatch(request):
     if not enfileirados:
         messages.warning(request, "Nenhum dos selecionados estava pendente para envio.")
     else:
+        empresa_id = empresa.pk if empresa else None
         for i, pk in enumerate(enfileirados):
             send_whatsapp_for_atendimento.apply_async(
-                args=[pk],
+                args=[pk, empresa_id],
                 countdown=i * _MSG_DELAY_SECONDS,
             )
         messages.success(request, f"{len(enfileirados)} mensagem(ns) enfileirada(s) para envio.")
@@ -192,6 +208,7 @@ def atendimento_dispatch(request):
 
 
 @login_required
+@empresa_required
 def export_csv(request):
     empresa = request.empresa
     qs = (

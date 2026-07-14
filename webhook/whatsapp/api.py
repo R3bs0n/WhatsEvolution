@@ -17,10 +17,14 @@ class EnvioWhatsAppLogSerializer(serializers.ModelSerializer):
 
 class EnvioWhatsAppLogViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = EnvioWhatsAppLogSerializer
-    queryset = EnvioWhatsAppLog.objects.select_related("atendimento").order_by("-enviado_em")
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        empresa = getattr(self.request, "empresa", None)
+        qs = (
+            EnvioWhatsAppLog.objects.for_empresa(empresa)
+            .select_related("atendimento")
+            .order_by("-enviado_em")
+        )
         sucesso = self.request.query_params.get("sucesso")
         if sucesso is not None:
             qs = qs.filter(sucesso=sucesso.lower() == "true")

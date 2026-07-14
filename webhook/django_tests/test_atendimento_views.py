@@ -5,16 +5,27 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 
 from atendimentos.models import Atendimento, SituacaoAtendimento
+from empresas.models import Empresa, MembroEmpresa
 
 
-def _make_situacao(nome="Agendado"):
-    obj, _ = SituacaoAtendimento.objects.get_or_create(nome=nome)
+def _make_empresa():
+    return Empresa.objects.get_or_create(
+        slug="empresa-teste",
+        defaults={"nome": "Empresa Teste"},
+    )[0]
+
+
+def _make_situacao(nome="Agendado", empresa=None):
+    empresa = empresa or _make_empresa()
+    obj, _ = SituacaoAtendimento.objects.get_or_create(nome=nome, empresa=empresa)
     return obj
 
 
 def _make_atendimento(**kwargs):
+    empresa = kwargs.pop("empresa", None) or _make_empresa()
     defaults = dict(
-        situacao=_make_situacao(),
+        empresa=empresa,
+        situacao=_make_situacao(empresa=empresa),
         paciente="Fulano da Silva",
         telefone="92999999999",
         exame_procedimento="Hemograma",
@@ -27,6 +38,8 @@ def _make_atendimento(**kwargs):
 class AuthenticatedTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="testuser", password="pass123")
+        self.empresa = _make_empresa()
+        MembroEmpresa.objects.create(usuario=self.user, empresa=self.empresa, papel="operador")
         self.client = Client()
         self.client.login(username="testuser", password="pass123")
 

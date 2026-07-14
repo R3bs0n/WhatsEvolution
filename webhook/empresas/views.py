@@ -5,6 +5,8 @@ from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from core.tenant_context import session_tenant_context
+
 from .models import Empresa, MembroEmpresa
 
 
@@ -73,7 +75,8 @@ def empresa_detail(request, pk):
     from whatsapp.models import CanalWhatsApp
     empresa = get_object_or_404(Empresa, pk=pk)
     membros = empresa.membros.select_related("usuario").order_by("usuario__username")
-    canais = CanalWhatsApp.objects.filter(empresa=empresa).order_by("-principal", "nome")
+    with session_tenant_context(empresa.pk):
+        canais = list(CanalWhatsApp.objects.filter(empresa=empresa).order_by("-principal", "nome"))
     return render(request, "empresas/empresa_detail.html", {
         "empresa": empresa,
         "membros": membros,
@@ -135,14 +138,15 @@ def canal_create(request, pk):
         return redirect("empresa-detail", pk=pk)
 
     try:
-        CanalWhatsApp.objects.create(
-            empresa=empresa,
-            nome=nome,
-            instance_name=instance_name,
-            api_url=api_url,
-            principal=principal,
-            ativo=True,
-        )
+        with session_tenant_context(empresa.pk):
+            CanalWhatsApp.objects.create(
+                empresa=empresa,
+                nome=nome,
+                instance_name=instance_name,
+                api_url=api_url,
+                principal=principal,
+                ativo=True,
+            )
         messages.success(request, f"Canal '{nome}' vinculado com sucesso.")
     except IntegrityError:
         messages.error(request, f"Instance name '{instance_name}' já está em uso por outro canal.")
@@ -159,9 +163,10 @@ def canal_set_principal(request, pk, canal_pk):
 
     from whatsapp.models import CanalWhatsApp
     empresa = get_object_or_404(Empresa, pk=pk)
-    canal = get_object_or_404(CanalWhatsApp, pk=canal_pk, empresa=empresa)
-    canal.principal = True
-    canal.save()
+    with session_tenant_context(empresa.pk):
+        canal = get_object_or_404(CanalWhatsApp, pk=canal_pk, empresa=empresa)
+        canal.principal = True
+        canal.save()
     messages.success(request, f"'{canal.nome}' definido como canal principal.")
     return redirect("empresa-detail", pk=pk)
 
@@ -175,9 +180,10 @@ def canal_toggle_ativo(request, pk, canal_pk):
 
     from whatsapp.models import CanalWhatsApp
     empresa = get_object_or_404(Empresa, pk=pk)
-    canal = get_object_or_404(CanalWhatsApp, pk=canal_pk, empresa=empresa)
-    canal.ativo = not canal.ativo
-    canal.save(update_fields=["ativo"])
+    with session_tenant_context(empresa.pk):
+        canal = get_object_or_404(CanalWhatsApp, pk=canal_pk, empresa=empresa)
+        canal.ativo = not canal.ativo
+        canal.save(update_fields=["ativo"])
     estado = "ativado" if canal.ativo else "desativado"
     messages.success(request, f"Canal '{canal.nome}' {estado}.")
     return redirect("empresa-detail", pk=pk)
@@ -192,9 +198,10 @@ def canal_delete(request, pk, canal_pk):
 
     from whatsapp.models import CanalWhatsApp
     empresa = get_object_or_404(Empresa, pk=pk)
-    canal = get_object_or_404(CanalWhatsApp, pk=canal_pk, empresa=empresa)
-    nome = canal.nome
-    canal.delete()
+    with session_tenant_context(empresa.pk):
+        canal = get_object_or_404(CanalWhatsApp, pk=canal_pk, empresa=empresa)
+        nome = canal.nome
+        canal.delete()
     messages.success(request, f"Canal '{nome}' removido.")
     return redirect("empresa-detail", pk=pk)
 

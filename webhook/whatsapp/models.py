@@ -9,8 +9,6 @@ class CanalWhatsApp(models.Model):
         "empresas.Empresa",
         on_delete=models.CASCADE,
         related_name="canais_whatsapp",
-        null=True,
-        blank=True,
     )
     nome = models.CharField(max_length=100)
     instance_name = models.CharField(max_length=100, unique=True)
@@ -18,6 +16,8 @@ class CanalWhatsApp(models.Model):
     principal = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = TenantManager()
 
     class Meta:
         verbose_name = "Canal WhatsApp"
@@ -41,8 +41,6 @@ class ConfiguracaoDisparo(models.Model):
         "empresas.Empresa",
         on_delete=models.CASCADE,
         related_name="configuracao_disparo",
-        null=True,
-        blank=True,
     )
     limite_diario_mensagens = models.IntegerField(
         default=1000, verbose_name="Limite diário de mensagens"
@@ -50,6 +48,9 @@ class ConfiguracaoDisparo(models.Model):
     tamanho_lote = models.IntegerField(default=300, verbose_name="Tamanho do lote")
     intervalo_segundos = models.IntegerField(
         default=3, verbose_name="Intervalo entre envios (segundos)"
+    )
+    mensagens_por_minuto = models.IntegerField(
+        default=20, verbose_name="Mensagens por minuto por canal"
     )
     contato_url = models.CharField(max_length=255, blank=True)
     privacy_policy_url = models.CharField(max_length=255, blank=True)
@@ -61,8 +62,7 @@ class ConfiguracaoDisparo(models.Model):
         verbose_name_plural = "Configurações de disparo"
 
     def __str__(self):
-        empresa_nome = self.empresa.nome if self.empresa_id else "Global"
-        return f"Config disparo — {empresa_nome}"
+        return f"Config disparo — {self.empresa.nome}"
 
 
 class TemplateMensagem(models.Model):
@@ -76,8 +76,6 @@ class TemplateMensagem(models.Model):
         "empresas.Empresa",
         on_delete=models.CASCADE,
         related_name="templates_mensagem",
-        null=True,
-        blank=True,
     )
     nome = models.CharField(max_length=100)
     categoria = models.CharField(max_length=20, choices=CATEGORIA_CHOICES, default="clinico")
@@ -107,7 +105,7 @@ class TemplateMensagem(models.Model):
 
 class ContatoBloqueado(models.Model):
     empresa = models.ForeignKey(
-        "empresas.Empresa", null=True, blank=True,
+        "empresas.Empresa",
         on_delete=models.CASCADE, related_name="contatos_bloqueados",
     )
     telefone = models.CharField(max_length=30)
@@ -166,7 +164,7 @@ class EnvioMensagem(models.Model):
 
     empresa = models.ForeignKey(
         "empresas.Empresa", on_delete=models.CASCADE,
-        related_name="envios_mensagem", null=True, blank=True,
+        related_name="envios_mensagem",
     )
     canal = models.ForeignKey(
         CanalWhatsApp, on_delete=models.SET_NULL,
@@ -268,7 +266,7 @@ class AtendimentoEnvio(models.Model):
 
 class EnvioWhatsAppLog(models.Model):
     empresa = models.ForeignKey(
-        "empresas.Empresa", null=True, blank=True,
+        "empresas.Empresa",
         on_delete=models.CASCADE, related_name="envios_whatsapp",
     )
     atendimento = models.ForeignKey(

@@ -12,7 +12,7 @@ class PdfImportLog(models.Model):
     ]
 
     empresa = models.ForeignKey(
-        "empresas.Empresa", null=True, blank=True,
+        "empresas.Empresa",
         on_delete=models.CASCADE, related_name="pdf_imports",
     )
     filename = models.CharField(max_length=255)

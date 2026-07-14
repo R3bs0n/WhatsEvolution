@@ -2,7 +2,8 @@
 import json
 import pytest
 from unittest.mock import patch, MagicMock
-from django.test import RequestFactory, TestCase
+from django.contrib.auth.models import User
+from django.test import RequestFactory, TestCase, override_settings
 from django.core.cache import cache
 
 from evolution.views import webhook_receiver, qr_display, _QR_PREFIX, _QR_TTL
@@ -15,6 +16,7 @@ def _post(view, payload, instance=None):
         "/webhook/",
         data=body,
         content_type="application/json",
+        HTTP_APIKEY="test-secret",
     )
     return view(request, instance=instance)
 
@@ -23,6 +25,7 @@ def _post(view, payload, instance=None):
 # Basic routing
 # ──────────────────────────────────────────────────────────────────────────────
 
+@override_settings(EVOLUTION_WEBHOOK_SECRET="test-secret")
 class WebhookReceiverMethodTest(TestCase):
     def test_get_returns_405(self):
         factory = RequestFactory()
@@ -37,7 +40,12 @@ class WebhookReceiverMethodTest(TestCase):
 
     def test_post_with_invalid_json_returns_400(self):
         factory = RequestFactory()
-        request = factory.post("/webhook/", data=b"not-json", content_type="application/json")
+        request = factory.post(
+            "/webhook/",
+            data=b"not-json",
+            content_type="application/json",
+            HTTP_APIKEY="test-secret",
+        )
         response = webhook_receiver(request)
         assert response.status_code == 400
 
@@ -54,6 +62,7 @@ class WebhookReceiverMethodTest(TestCase):
 # Event name normalisation (lowercase dot vs UPPERCASE_UNDERSCORE)
 # ──────────────────────────────────────────────────────────────────────────────
 
+@override_settings(EVOLUTION_WEBHOOK_SECRET="test-secret")
 class EventNormalisationTest(TestCase):
     def setUp(self):
         cache.clear()
@@ -131,6 +140,11 @@ class EventNormalisationTest(TestCase):
 class QrDisplayTest(TestCase):
     def setUp(self):
         cache.clear()
+        self.user = User.objects.create_superuser(
+            username="root",
+            email="root@example.com",
+            password="pass",
+        )
 
     def tearDown(self):
         cache.clear()
@@ -138,6 +152,7 @@ class QrDisplayTest(TestCase):
     def _get_qr(self, instance="clinica"):
         factory = RequestFactory()
         request = factory.get(f"/qr/{instance}/")
+        request.user = self.user
         return qr_display(request, instance=instance)
 
     def test_qr_not_available_returns_202(self):

@@ -117,7 +117,6 @@ CREATE POLICY tenant_isolation ON campanhas_campanha
     WITH CHECK (empresa_id = current_empresa_id());
 
 -- campanhas_destinatariocampanha (vinculada à campanha, não tem empresa_id direto)
--- Usa JOIN com campanha para isolamento
 ALTER TABLE campanhas_destinatariocampanha ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campanhas_destinatariocampanha FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON campanhas_destinatariocampanha;
@@ -129,3 +128,83 @@ CREATE POLICY tenant_isolation ON campanhas_destinatariocampanha
               AND c.empresa_id = current_empresa_id()
         )
     );
+
+-- campanhas_segmento_contatos (tabela M2M gerada pelo Django: Segmento.contatos)
+-- Não tem empresa_id direto; usa JOIN via segmento
+ALTER TABLE campanhas_segmento_contatos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campanhas_segmento_contatos FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON campanhas_segmento_contatos;
+CREATE POLICY tenant_isolation ON campanhas_segmento_contatos
+    USING (
+        EXISTS (
+            SELECT 1 FROM campanhas_segmento s
+            WHERE s.id = campanhas_segmento_contatos.segmento_id
+              AND s.empresa_id = current_empresa_id()
+        )
+    );
+
+-- whatsapp_tentativaenvio (modelo orphan; empresa via enviomensagem)
+ALTER TABLE whatsapp_tentativaenvio ENABLE ROW LEVEL SECURITY;
+ALTER TABLE whatsapp_tentativaenvio FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON whatsapp_tentativaenvio;
+CREATE POLICY tenant_isolation ON whatsapp_tentativaenvio
+    USING (
+        EXISTS (
+            SELECT 1 FROM whatsapp_enviomensagem e
+            WHERE e.id = whatsapp_tentativaenvio.envio_id
+              AND e.empresa_id = current_empresa_id()
+        )
+    );
+
+-- whatsapp_eventomensagem (modelo orphan; empresa via enviomensagem)
+ALTER TABLE whatsapp_eventomensagem ENABLE ROW LEVEL SECURITY;
+ALTER TABLE whatsapp_eventomensagem FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON whatsapp_eventomensagem;
+CREATE POLICY tenant_isolation ON whatsapp_eventomensagem
+    USING (
+        EXISTS (
+            SELECT 1 FROM whatsapp_enviomensagem e
+            WHERE e.id = whatsapp_eventomensagem.envio_id
+              AND e.empresa_id = current_empresa_id()
+        )
+    );
+
+-- whatsapp_atendimentoenvio (modelo orphan; empresa via atendimento)
+ALTER TABLE whatsapp_atendimentoenvio ENABLE ROW LEVEL SECURITY;
+ALTER TABLE whatsapp_atendimentoenvio FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON whatsapp_atendimentoenvio;
+CREATE POLICY tenant_isolation ON whatsapp_atendimentoenvio
+    USING (
+        EXISTS (
+            SELECT 1 FROM atendimentos_atendimento a
+            WHERE a.id = whatsapp_atendimentoenvio.atendimento_id
+              AND a.empresa_id = current_empresa_id()
+        )
+    );
+
+
+-- ── FUNÇÃO PARA RESOLUÇÃO DE INSTÂNCIA NO WEBHOOK ───────────────────────────
+--
+-- O endpoint /webhook/ é anônimo (sem usuário) e precisa mapear
+-- instance_name → empresa ANTES de ter qualquer contexto de tenant.
+-- SECURITY DEFINER faz a função rodar com os privilégios do dono (evolution,
+-- que tem BYPASSRLS), contornando o RLS apenas para esta consulta pontual.
+-- app_role pode executar mas não pode ler whatsapp_canalwhatsapp sem tenant.
+
+CREATE OR REPLACE FUNCTION resolve_canal_by_instance(p_instance text)
+RETURNS TABLE(canal_id bigint, empresa_id bigint, canal_api_url text)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public, pg_temp
+AS $$
+    SELECT id, empresa_id, api_url::text
+    FROM whatsapp_canalwhatsapp
+    WHERE instance_name = p_instance
+      AND ativo = true
+    LIMIT 1;
+$$;
+
+REVOKE ALL ON FUNCTION public.resolve_canal_by_instance(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.resolve_canal_by_instance(text) FROM app_role;
+GRANT EXECUTE ON FUNCTION public.resolve_canal_by_instance(text) TO app_role;

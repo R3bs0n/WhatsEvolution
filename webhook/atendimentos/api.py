@@ -16,12 +16,16 @@ class AtendimentoSerializer(serializers.ModelSerializer):
         read_only_fields = ["criado_em", "data_envio"]
 
 
-class AtendimentoViewSet(viewsets.ModelViewSet):
+class AtendimentoViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AtendimentoSerializer
-    queryset = Atendimento.objects.select_related("situacao").order_by("-criado_em")
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        empresa = getattr(self.request, "empresa", None)
+        qs = (
+            Atendimento.objects.for_empresa(empresa)
+            .select_related("situacao")
+            .order_by("-criado_em")
+        )
         q = self.request.query_params.get("q", "")
         if q:
             qs = qs.filter(paciente__icontains=q) | qs.filter(telefone__icontains=q)

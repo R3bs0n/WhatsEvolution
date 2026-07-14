@@ -66,6 +66,9 @@ def _process_batch(
     pdf_import_log=None,
     empresa=None,
 ) -> tuple[int, int]:
+    if empresa is None:
+        raise ValueError("Empresa obrigatoria para importar atendimentos.")
+
     if not batch:
         return 0, 0
 
@@ -85,7 +88,7 @@ def _process_batch(
     intra_dupes = len(batch) - len(unique)
 
     telefones = [rec.telefone for rec, _, _ in unique]
-    base_qs = Atendimento.objects.for_empresa(empresa) if empresa is not None else Atendimento.objects
+    base_qs = Atendimento.objects.for_empresa(empresa)
     existing_qs = (
         base_qs
         .filter(telefone__in=telefones)

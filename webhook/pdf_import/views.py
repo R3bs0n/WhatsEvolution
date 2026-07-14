@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from atendimentos.models import SituacaoAtendimento
+from core.decorators import empresa_required
 from core.services.pdf_extractor import PDFExtractorService
 from pdf_import.repository import bulk_import_records
 
@@ -49,6 +50,7 @@ def _get_or_create_situacao(nome: str, empresa=None) -> SituacaoAtendimento:
 
 
 @login_required
+@empresa_required
 def upload_pdf(request):
     empresa = request.empresa
     logs_recentes = (
@@ -117,6 +119,7 @@ def upload_pdf(request):
 
 
 @login_required
+@empresa_required
 def edit_pdf_log(request, pk):
     empresa = request.empresa
     log = get_object_or_404(PdfImportLog.objects.for_empresa(empresa), pk=pk)

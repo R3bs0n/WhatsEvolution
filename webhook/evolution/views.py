@@ -1,11 +1,13 @@
+import hmac
 import json
 import logging
 import re
+from functools import wraps
 
 import httpx
 from django.contrib import messages
-from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
+from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
@@ -21,10 +23,65 @@ _QR_TTL = 180
 _INSTANCE_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,50}$")
 
 
+def _require_superuser(view_func):
+    """Restringe a view a superusuarios."""
+
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated or not request.user.is_superuser:
+            return redirect("login")
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
+
+
+def _validate_webhook_secret(request) -> bool:
+    from django.conf import settings
+
+    secret = getattr(settings, "EVOLUTION_WEBHOOK_SECRET", "")
+    if not secret:
+        if getattr(settings, "DEBUG", False):
+            logger.warning(
+                "EVOLUTION_WEBHOOK_SECRET nao configurado; aceitando webhook apenas por DEBUG=True."
+            )
+            return True
+        logger.error("EVOLUTION_WEBHOOK_SECRET nao configurado; webhook rejeitado.")
+        return False
+
+    provided = request.headers.get("apikey", "")
+    return hmac.compare_digest(provided, secret)
+
+
+def _resolve_empresa_by_instance(inst: str):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT canal_id, empresa_id FROM resolve_canal_by_instance(%s)",
+                [inst],
+            )
+            row = cursor.fetchone()
+    except Exception as exc:
+        logger.error("Nao foi possivel resolver tenant do webhook para instancia '%s': %s", inst, exc)
+        return None, None
+
+    if not row:
+        return None, None
+
+    canal_id, empresa_id = row
+    from empresas.models import Empresa
+
+    empresa = Empresa.objects.filter(pk=empresa_id, ativo=True).first()
+    return canal_id, empresa
+
+
 @csrf_exempt
 def webhook_receiver(request, instance=None):
     if request.method != "POST":
         return JsonResponse({"error": "method not allowed"}, status=405)
+
+    if not _validate_webhook_secret(request):
+        logger.warning("Webhook recebido com secret invalido (ip=%s)", request.META.get("REMOTE_ADDR"))
+        return JsonResponse({"error": "unauthorized"}, status=401)
 
     try:
         payload = json.loads(request.body)
@@ -35,9 +92,12 @@ def webhook_receiver(request, instance=None):
     data = payload.get("data", {})
     inst = payload.get("instance", instance or "unknown")
 
-    logger.info("Evento recebido: %s  instância: %s", event_type, inst)
+    empresa = None
+    if inst and inst != "unknown":
+        _canal_id, empresa = _resolve_empresa_by_instance(inst)
 
-    # Evolution API v2 sends events as "qrcode.updated" or "QRCODE_UPDATED" depending on config
+    logger.info("Evento recebido: %s  instancia: %s  empresa: %s", event_type, inst, empresa)
+
     event_normalized = event_type.upper().replace(".", "_") if event_type else ""
 
     if event_normalized == "QRCODE_UPDATED":
@@ -50,7 +110,7 @@ def webhook_receiver(request, instance=None):
     elif event_normalized == "CONNECTION_UPDATE":
         if isinstance(data, dict):
             state = data.get("state", "")
-            logger.info("Conexão '%s': %s", inst, state)
+            logger.info("Conexao '%s': %s", inst, state)
             if state == "open":
                 cache.delete(f"{_QR_PREFIX}{inst}")
 
@@ -64,8 +124,6 @@ def webhook_receiver(request, instance=None):
                 (msg.get("message") or {}).get("conversation")
                 or ((msg.get("message") or {}).get("extendedTextMessage") or {}).get("text", "")
             )
-            # Não logar o conteúdo da mensagem do paciente (pode conter dados
-            # sensíveis); registrar apenas o tamanho para fins de depuração.
             logger.info(
                 "Mensagem recebida de %s (%d caractere(s))",
                 mask_phone(key.get("remoteJid", "")),
@@ -75,30 +133,30 @@ def webhook_receiver(request, instance=None):
     return JsonResponse({"status": "received"})
 
 
-@staff_member_required(login_url="login")
+@_require_superuser
 def qr_display(request, instance):
     base64_img = cache.get(f"{_QR_PREFIX}{instance}")
     if not base64_img:
         html = f"""<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
-<title>QR Code — {instance}</title></head>
+<title>QR Code - {instance}</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:40px">
-  <h2>QR Code não disponível</h2>
-  <p>A instância <b>{instance}</b> precisa estar no estado <b>connecting</b>.<br>
-  Aguarde e a página recarrega automaticamente.</p>
+  <h2>QR Code nao disponivel</h2>
+  <p>A instancia <b>{instance}</b> precisa estar no estado <b>connecting</b>.<br>
+  Aguarde e a pagina recarrega automaticamente.</p>
   <script>setTimeout(()=>location.reload(),4000)</script>
 </body></html>"""
         return HttpResponse(html, status=202, content_type="text/html")
 
     html = f"""<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
-<title>QR Code — {instance}</title></head>
+<title>QR Code - {instance}</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:40px">
-  <h2>Escaneie com o WhatsApp &mdash; <b>{instance}</b></h2>
+  <h2>Escaneie com o WhatsApp - <b>{instance}</b></h2>
   <img src="{base64_img}"
        style="width:300px;height:300px;border:2px solid #ccc;border-radius:8px;
               display:block;margin:16px auto"/>
-  <p>A página recarrega a cada 20 segundos.</p>
+  <p>A pagina recarrega a cada 20 segundos.</p>
   <script>setTimeout(()=>location.reload(),20000)</script>
 </body></html>"""
     return HttpResponse(html, content_type="text/html")
@@ -107,45 +165,43 @@ def qr_display(request, instance):
 def _qr_page(instance: str, base64_img: str) -> HttpResponse:
     html = f"""<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
-<title>QR Code — {instance}</title></head>
+<title>QR Code - {instance}</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:40px">
-  <h2>Escaneie com o WhatsApp &mdash; <b>{instance}</b></h2>
+  <h2>Escaneie com o WhatsApp - <b>{instance}</b></h2>
   <img src="{base64_img}"
        style="width:300px;height:300px;border:2px solid #ccc;border-radius:8px;
               display:block;margin:16px auto"/>
-  <p><a href="/instancias/">&larr; Voltar para Instâncias</a></p>
+  <p><a href="/instancias/">&larr; Voltar para Instancias</a></p>
 </body></html>"""
     return HttpResponse(html, content_type="text/html")
 
 
-@staff_member_required(login_url="login")
+@_require_superuser
 def instance_list(request):
-    """Lista instâncias direto da Evolution API (sem cópia local) para
-    garantir que o painel sempre espelhe o estado real."""
     instances = []
     try:
         instances = EvolutionClient().fetch_instances()
     except httpx.HTTPError as exc:
-        logger.error("Erro ao buscar instâncias na Evolution API: %s", exc)
-        messages.error(request, "Não foi possível conectar à Evolution API.")
+        logger.error("Erro ao buscar instancias na Evolution API: %s", exc)
+        messages.error(request, "Nao foi possivel conectar a Evolution API.")
 
     return render(request, "evolution/instances.html", {"instances": instances})
 
 
-@staff_member_required(login_url="login")
+@_require_superuser
 @require_POST
 def instance_create(request):
     name = (request.POST.get("instance_name") or "").strip()
     if not _INSTANCE_NAME_RE.match(name):
         messages.error(
             request,
-            "Nome inválido. Use apenas letras, números, hífen ou underline (1-50 caracteres).",
+            "Nome invalido. Use apenas letras, numeros, hifen ou underline (1-50 caracteres).",
         )
         return redirect("instance-list")
 
     integration = request.POST.get("integration") or "WHATSAPP-BAILEYS"
     if integration not in ("WHATSAPP-BAILEYS", "WHATSAPP-BUSINESS"):
-        messages.error(request, "Tipo de integração inválido.")
+        messages.error(request, "Tipo de integracao invalido.")
         return redirect("instance-list")
 
     number = (request.POST.get("number") or "").strip()
@@ -155,7 +211,7 @@ def instance_create(request):
     if integration == "WHATSAPP-BUSINESS" and (not number or not token):
         messages.error(
             request,
-            "Para a API oficial (Meta), informe o número e o token de acesso.",
+            "Para a API oficial (Meta), informe o numero e o token de acesso.",
         )
         return redirect("instance-list")
 
@@ -169,55 +225,55 @@ def instance_create(request):
         )
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text[:200]
-        logger.error("Erro ao criar instância '%s': %s", name, detail)
-        messages.error(request, f"Evolution API recusou a criação: {detail}")
+        logger.error("Erro ao criar instancia '%s': %s", name, detail)
+        messages.error(request, f"Evolution API recusou a criacao: {detail}")
         return redirect("instance-list")
     except httpx.HTTPError as exc:
-        logger.error("Erro ao criar instância '%s': %s", name, exc)
-        messages.error(request, "Não foi possível conectar à Evolution API.")
+        logger.error("Erro ao criar instancia '%s': %s", name, exc)
+        messages.error(request, "Nao foi possivel conectar a Evolution API.")
         return redirect("instance-list")
 
     base64_img = (result.get("qrcode") or {}).get("base64", "")
     if not base64_img:
-        messages.success(request, f"Instância '{name}' criada. Abra a conexão para gerar o QR Code.")
+        messages.success(request, f"Instancia '{name}' criada. Abra a conexao para gerar o QR Code.")
         return redirect("instance-list")
 
     return _qr_page(name, base64_img)
 
 
-@staff_member_required(login_url="login")
+@_require_superuser
 def instance_connect(request, instance):
     if not _INSTANCE_NAME_RE.match(instance):
-        messages.error(request, "Nome de instância inválido.")
+        messages.error(request, "Nome de instancia invalido.")
         return redirect("instance-list")
 
     try:
         result = EvolutionClient().connect_instance(instance)
     except httpx.HTTPError as exc:
-        logger.error("Erro ao conectar instância '%s': %s", instance, exc)
-        messages.error(request, "Não foi possível obter o QR Code desta instância.")
+        logger.error("Erro ao conectar instancia '%s': %s", instance, exc)
+        messages.error(request, "Nao foi possivel obter o QR Code desta instancia.")
         return redirect("instance-list")
 
     base64_img = result.get("base64", "")
     if not base64_img:
-        messages.info(request, f"Instância '{instance}' já está conectada.")
+        messages.info(request, f"Instancia '{instance}' ja esta conectada.")
         return redirect("instance-list")
 
     return _qr_page(instance, base64_img)
 
 
-@staff_member_required(login_url="login")
+@_require_superuser
 @require_POST
 def instance_delete(request, instance):
     if not _INSTANCE_NAME_RE.match(instance):
-        messages.error(request, "Nome de instância inválido.")
+        messages.error(request, "Nome de instancia invalido.")
         return redirect("instance-list")
 
     try:
         EvolutionClient().delete_instance(instance)
-        messages.success(request, f"Instância '{instance}' excluída.")
+        messages.success(request, f"Instancia '{instance}' excluida.")
     except httpx.HTTPError as exc:
-        logger.error("Erro ao excluir instância '%s': %s", instance, exc)
-        messages.error(request, "Não foi possível excluir esta instância.")
+        logger.error("Erro ao excluir instancia '%s': %s", instance, exc)
+        messages.error(request, "Nao foi possivel excluir esta instancia.")
 
     return redirect("instance-list")

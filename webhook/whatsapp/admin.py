@@ -1,5 +1,7 @@
 from django.contrib import admin
 
+from core.admin import SuperuserOnlyAdminMixin, TenantAdminMixin
+
 from .models import (
     CanalWhatsApp,
     ConfiguracaoDisparo,
@@ -11,7 +13,7 @@ from .models import (
 
 
 @admin.register(EnvioWhatsAppLog)
-class EnvioWhatsAppLogAdmin(admin.ModelAdmin):
+class EnvioWhatsAppLogAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("atendimento", "empresa", "telefone", "sucesso", "status_retorno", "codigo_retorno", "enviado_em")
     list_filter = ("sucesso", "empresa", "enviado_em")
     search_fields = ("telefone", "atendimento__paciente")
@@ -20,7 +22,7 @@ class EnvioWhatsAppLogAdmin(admin.ModelAdmin):
 
 
 @admin.register(ContatoBloqueado)
-class ContatoBloqueadoAdmin(admin.ModelAdmin):
+class ContatoBloqueadoAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("telefone", "empresa", "data_bloqueio")
     list_filter = ("empresa",)
     search_fields = ("telefone",)
@@ -29,18 +31,18 @@ class ContatoBloqueadoAdmin(admin.ModelAdmin):
 
 
 @admin.register(ConfiguracaoSistema)
-class ConfiguracaoSistemaAdmin(admin.ModelAdmin):
+class ConfiguracaoSistemaAdmin(SuperuserOnlyAdminMixin, admin.ModelAdmin):
     list_display = ("limite_diario_mensagens",)
 
     def has_add_permission(self, request):
-        return not ConfiguracaoSistema.objects.exists()
+        return request.user.is_superuser and not ConfiguracaoSistema.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         return False
 
 
 @admin.register(CanalWhatsApp)
-class CanalWhatsAppAdmin(admin.ModelAdmin):
+class CanalWhatsAppAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("nome", "instance_name", "empresa", "principal", "ativo", "created_at")
     list_filter = ("empresa", "principal", "ativo")
     search_fields = ("nome", "instance_name")
@@ -51,11 +53,13 @@ class CanalWhatsAppAdmin(admin.ModelAdmin):
 
 
 @admin.register(ConfiguracaoDisparo)
-class ConfiguracaoDisparoAdmin(admin.ModelAdmin):
-    list_display = ("empresa", "limite_diario_mensagens", "tamanho_lote", "intervalo_segundos")
+class ConfiguracaoDisparoAdmin(TenantAdminMixin, admin.ModelAdmin):
+    list_display = ("empresa", "limite_diario_mensagens", "mensagens_por_minuto", "tamanho_lote", "intervalo_segundos")
     search_fields = ("empresa__nome",)
 
     def has_add_permission(self, request):
+        if not request.user.is_superuser:
+            return False
         from empresas.models import Empresa
         empresas_sem_config = Empresa.objects.exclude(
             pk__in=ConfiguracaoDisparo.objects.values_list("empresa_id", flat=True)
@@ -64,7 +68,7 @@ class ConfiguracaoDisparoAdmin(admin.ModelAdmin):
 
 
 @admin.register(TemplateMensagem)
-class TemplateMensagemAdmin(admin.ModelAdmin):
+class TemplateMensagemAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("nome", "empresa", "categoria", "ativo", "created_at")
     list_filter = ("empresa", "categoria", "ativo")
     search_fields = ("nome", "empresa__nome")

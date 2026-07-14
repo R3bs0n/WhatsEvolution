@@ -154,14 +154,20 @@ REST_FRAMEWORK = {
 EVOLUTION_API_URL = env.str("EVOLUTION_API_URL", default="http://evolution-api:8080")
 EVOLUTION_API_KEY = env.str("EVOLUTION_API_KEY", default="")
 EVOLUTION_INSTANCE_NAME = env.str("EVOLUTION_INSTANCE_NAME", default="clinica")
+EVOLUTION_WEBHOOK_SECRET = env.str("EVOLUTION_WEBHOOK_SECRET", default="")
 
 DEFAULT_COUNTRY_CODE = env.str("DEFAULT_COUNTRY_CODE", default="55")
 WHATSAPP_PROVIDER = env.str("WHATSAPP_PROVIDER", default="evolution")
+WHATSAPP_DEFAULT_COMPANY_NAME = env.str(
+    "WHATSAPP_DEFAULT_COMPANY_NAME",
+    default="Clinica Medica Saude Popular",
+)
 WHATSAPP_CONTACT_URL = env.str("WHATSAPP_CONTACT_URL", default="https://wa.me/5548988762025")
 # Se vazio, message_builder usa o template padrão embutido
 WHATSAPP_MESSAGE_TEMPLATE = env.str("WHATSAPP_MESSAGE_TEMPLATE", default="") or ""
 # Link da política de privacidade do controlador; se vazio, a linha é omitida da mensagem
 WHATSAPP_PRIVACY_POLICY_URL = env.str("WHATSAPP_PRIVACY_POLICY_URL", default="")
+BILLING_GRACE_MODE = env.bool("BILLING_GRACE_MODE", default=True)
 
 LOGGING = {
     "version": 1,

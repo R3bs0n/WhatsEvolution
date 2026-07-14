@@ -6,18 +6,20 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 
 from atendimentos.models import Atendimento, SituacaoAtendimento
+from empresas.models import Empresa, MembroEmpresa
 from whatsapp.services.message_builder import build_message
 
 
-def _make_situacao():
-    obj, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado")
+def _make_situacao(empresa):
+    obj, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado", empresa=empresa)
     return obj
 
 
-def _make_atendimento(n=1, status="N"):
-    situacao = _make_situacao()
+def _make_atendimento(empresa, n=1, status="N"):
+    situacao = _make_situacao(empresa)
     return [
         Atendimento.objects.create(
+            empresa=empresa,
             situacao=situacao,
             paciente=f"Paciente {i}",
             telefone=f"559200000{i:04d}",
@@ -31,6 +33,8 @@ def _make_atendimento(n=1, status="N"):
 class SendPanelTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="op", password="pass")
+        self.empresa = Empresa.objects.create(nome="Empresa Teste", slug="empresa-teste")
+        MembroEmpresa.objects.create(usuario=self.user, empresa=self.empresa, papel="operador")
         self.client = Client()
         self.client.login(username="op", password="pass")
 
@@ -43,7 +47,7 @@ class SendPanelTest(TestCase):
         assert response.status_code == 200
 
     def test_post_marks_atendimentos_as_enfileirado(self):
-        records = _make_atendimento(3)
+        records = _make_atendimento(self.empresa, 3)
         with patch("whatsapp.views.send_whatsapp_for_atendimento") as mock_task:
             mock_task.apply_async = lambda args, countdown: None
             self.client.post(reverse("whatsapp-send"))
@@ -54,7 +58,7 @@ class SendPanelTest(TestCase):
 
     def test_double_click_does_not_re_enqueue_same_records(self):
         """Second POST must not re-enqueue records already marked 'E'."""
-        _make_atendimento(5)
+        _make_atendimento(self.empresa, 5)
         dispatched_ids = []
 
         def fake_apply_async(args, countdown):
@@ -80,7 +84,7 @@ class SendPanelTest(TestCase):
 
     def test_rate_limiting_uses_countdown(self):
         """Each task must have countdown = index * _MSG_DELAY_SECONDS."""
-        _make_atendimento(3)
+        _make_atendimento(self.empresa, 3)
         countdowns = []
 
         def fake_apply_async(args, countdown):

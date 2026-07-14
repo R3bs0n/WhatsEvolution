@@ -12,14 +12,17 @@ logger = logging.getLogger(__name__)
 
 
 class WhatsAppSendService:
-    def __init__(self):
-        self.provider = get_provider()
+    def __init__(self, provider=None):
+        self.provider = provider
 
     def send_for_atendimento(self, atendimento) -> bool:
+        empresa = atendimento.empresa
+
         try:
             phone = normalize_phone(atendimento.telefone, settings.DEFAULT_COUNTRY_CODE)
         except PhoneValidationError as exc:
             EnvioWhatsAppLog.objects.create(
+                empresa=empresa,
                 atendimento=atendimento,
                 telefone=atendimento.telefone or "",
                 mensagem="",
@@ -30,9 +33,12 @@ class WhatsAppSendService:
             logger.warning("Telefone inválido (atendimento %s): %s", atendimento.pk, exc)
             return False
 
-        from whatsapp.models import ContatoBloqueado
-        if ContatoBloqueado.objects.filter(telefone=phone).exists():
+        from whatsapp.models import CanalWhatsApp, ContatoBloqueado
+
+        # Opt-out isolado por empresa
+        if ContatoBloqueado.objects.for_empresa(empresa).filter(telefone=phone).exists():
             EnvioWhatsAppLog.objects.create(
+                empresa=empresa,
                 atendimento=atendimento,
                 telefone=phone,
                 mensagem="",
@@ -47,10 +53,23 @@ class WhatsAppSendService:
             )
             return False
 
-        mensagem = build_message(atendimento.paciente, atendimento.exame_procedimento)
-        resultado = self.provider.send_message(phone, mensagem)
+        # Resolve canal principal da empresa (fallback: settings globais)
+        canal = None
+        if empresa:
+            canal = CanalWhatsApp.objects.filter(
+                empresa=empresa, principal=True, ativo=True
+            ).first()
+
+        provider = self.provider or get_provider(canal=canal)
+        mensagem = build_message(
+            atendimento.paciente,
+            atendimento.exame_procedimento,
+            empresa=empresa,
+        )
+        resultado = provider.send_message(phone, mensagem)
 
         EnvioWhatsAppLog.objects.create(
+            empresa=empresa,
             atendimento=atendimento,
             telefone=phone,
             mensagem=mensagem,

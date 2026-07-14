@@ -4,6 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.utils import timezone
 
+from core.decorators import empresa_required
+
 MESES_PT = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
@@ -11,10 +13,11 @@ MESES_PT = [
 
 
 @login_required
+@empresa_required
 def dashboard(request):
     from atendimentos.models import Atendimento
     from pdf_import.models import PdfImportLog
-    from whatsapp.models import ConfiguracaoSistema, EnvioWhatsAppLog
+    from whatsapp.models import ConfiguracaoDisparo, ConfiguracaoSistema, EnvioWhatsAppLog
 
     empresa = request.empresa
     today = timezone.localdate()
@@ -67,7 +70,11 @@ def dashboard(request):
         data_envio__month=today.month,
     ).count()
 
-    config = ConfiguracaoSistema.get()
+    # Prioriza configuração por empresa; usa ConfiguracaoSistema como fallback global
+    if empresa:
+        config, _ = ConfiguracaoDisparo.objects.get_or_create(empresa=empresa)
+    else:
+        config = ConfiguracaoSistema.get()
     limite_diario = config.limite_diario_mensagens
     percentual_limite = min(round((mensagens_hoje / limite_diario) * 100), 100) if limite_diario else 0
 

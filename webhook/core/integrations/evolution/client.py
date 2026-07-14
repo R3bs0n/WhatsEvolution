@@ -7,10 +7,10 @@ logger = logging.getLogger(__name__)
 
 
 class EvolutionClient:
-    def __init__(self):
-        self.base_url = settings.EVOLUTION_API_URL.rstrip("/")
+    def __init__(self, instance_name: str = None, api_url: str = None):
+        self.base_url = (api_url or settings.EVOLUTION_API_URL).rstrip("/")
         self.api_key = settings.EVOLUTION_API_KEY
-        self.instance = settings.EVOLUTION_INSTANCE_NAME
+        self.instance = instance_name or settings.EVOLUTION_INSTANCE_NAME
         self._headers = {"apikey": self.api_key, "Content-Type": "application/json"}
 
     def send_text(self, phone: str, message: str) -> dict:

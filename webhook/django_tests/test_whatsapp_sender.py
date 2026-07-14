@@ -4,12 +4,20 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase, override_settings
 
 from atendimentos.models import Atendimento, SituacaoAtendimento
+from empresas.models import Empresa
 from whatsapp.models import EnvioWhatsAppLog
 from whatsapp.services.fake_provider import FakeWhatsAppProvider
 from whatsapp.services.providers import WhatsAppSendResult
 from whatsapp.services.provider_factory import get_provider
 from whatsapp.services.sender import WhatsAppSendService
 from whatsapp.services.message_builder import build_message
+
+
+def _make_empresa():
+    return Empresa.objects.get_or_create(
+        slug="empresa-teste",
+        defaults={"nome": "Empresa Teste"},
+    )[0]
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -83,8 +91,10 @@ class MessageBuilderTest(TestCase):
 @override_settings(WHATSAPP_PROVIDER="fake", DEFAULT_COUNTRY_CODE="55")
 class SendServiceTest(TestCase):
     def _make_atendimento(self, telefone="92999999999", status="N"):
-        situacao, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado")
+        empresa = _make_empresa()
+        situacao, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado", empresa=empresa)
         return Atendimento.objects.create(
+            empresa=empresa,
             situacao=situacao,
             paciente="Maria Teste",
             telefone=telefone,
@@ -133,8 +143,7 @@ class SendServiceTest(TestCase):
         mock_provider.send_message.return_value = WhatsAppSendResult(
             success=False, status="HTTP_ERROR", code="500", detail="Internal Server Error"
         )
-        service = WhatsAppSendService()
-        service.provider = mock_provider
+        service = WhatsAppSendService(provider=mock_provider)
         result = service.send_for_atendimento(atend)
         assert result is False
         log = EnvioWhatsAppLog.objects.filter(atendimento=atend).first()
@@ -157,8 +166,10 @@ class SendServiceTest(TestCase):
 @override_settings(WHATSAPP_PROVIDER="fake", DEFAULT_COUNTRY_CODE="55")
 class CeleryTaskTest(TestCase):
     def _make_atendimento(self, status="N"):
-        situacao, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado")
+        empresa = _make_empresa()
+        situacao, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado", empresa=empresa)
         return Atendimento.objects.create(
+            empresa=empresa,
             situacao=situacao,
             paciente="Celery Paciente",
             telefone="92999999999",

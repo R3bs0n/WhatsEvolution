@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from atendimentos.models import Atendimento
+from core.decorators import empresa_required
 from whatsapp.models import ContatoBloqueado, EnvioWhatsAppLog
 from whatsapp.tasks import send_whatsapp_for_atendimento
 
@@ -19,6 +20,7 @@ _MSG_DELAY_SECONDS = 3
 
 
 @login_required
+@empresa_required
 def send_panel(request):
     empresa = request.empresa
     pendentes_qs = (
@@ -30,6 +32,12 @@ def send_panel(request):
     total_lote = min(total_pendentes, _LOTE_SIZE)
 
     if request.method == "POST":
+        from billing.utils import empresa_pode_disparar
+        pode, motivo = empresa_pode_disparar(empresa)
+        if not pode:
+            messages.error(request, motivo)
+            return redirect("send-panel")
+
         with transaction.atomic():
             ids = list(
                 Atendimento.objects.for_empresa(empresa)
@@ -46,9 +54,10 @@ def send_panel(request):
         if not ids:
             messages.warning(request, "Nenhum atendimento pendente para envio.")
         else:
+            empresa_id = empresa.pk if empresa else None
             for i, pk in enumerate(ids):
                 send_whatsapp_for_atendimento.apply_async(
-                    args=[pk],
+                    args=[pk, empresa_id],
                     countdown=i * _MSG_DELAY_SECONDS,
                 )
             messages.success(request, f"{len(ids)} mensagens enfileiradas para envio.")
@@ -60,6 +69,7 @@ def send_panel(request):
 
 
 @login_required
+@empresa_required
 def logs(request):
     empresa = request.empresa
 
@@ -134,6 +144,7 @@ def logs(request):
 
 
 @login_required
+@empresa_required
 def optout_list(request):
     empresa = request.empresa
 
@@ -157,6 +168,7 @@ def optout_list(request):
 
 @login_required
 @require_POST
+@empresa_required
 def optout_delete(request, pk):
     empresa = request.empresa
     obj = get_object_or_404(ContatoBloqueado.objects.for_empresa(empresa), pk=pk)

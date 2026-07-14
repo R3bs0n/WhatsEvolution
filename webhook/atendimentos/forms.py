@@ -27,9 +27,7 @@ class AtendimentoForm(forms.ModelForm):
 
     def __init__(self, *args, empresa=None, **kwargs):
         super().__init__(*args, **kwargs)
-        situacoes = SituacaoAtendimento.objects.filter(ativo=True)
-        if empresa is not None:
-            situacoes = situacoes.filter(empresa=empresa)
+        situacoes = SituacaoAtendimento.objects.for_empresa(empresa).filter(ativo=True)
         self.fields["situacao"].queryset = situacoes
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "form-control")

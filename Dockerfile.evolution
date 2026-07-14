@@ -1,4 +1,4 @@
-FROM atendai/evolution-api:latest
+FROM atendai/evolution-api@sha256:1a69aaeea408ccf753e8c9ad5fa91146a478ce4d3609577fd73ad2c52e69f8ae
 
 # Install git (required by some npm packages with git dependencies)
 RUN apk add --no-cache git

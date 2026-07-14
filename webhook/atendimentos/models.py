@@ -5,7 +5,7 @@ from core.managers import TenantManager
 
 class StatusAtendimento(models.Model):
     empresa = models.ForeignKey(
-        "empresas.Empresa", null=True, blank=True,
+        "empresas.Empresa",
         on_delete=models.CASCADE, related_name="status_atendimento",
     )
     nome = models.CharField(max_length=50)
@@ -24,7 +24,7 @@ class StatusAtendimento(models.Model):
 
 class SituacaoAtendimento(models.Model):
     empresa = models.ForeignKey(
-        "empresas.Empresa", null=True, blank=True,
+        "empresas.Empresa",
         on_delete=models.CASCADE, related_name="situacoes_atendimento",
     )
     nome = models.CharField(max_length=100)
@@ -92,7 +92,7 @@ class Atendimento(models.Model):
         verbose_name="Importação PDF",
     )
     empresa = models.ForeignKey(
-        "empresas.Empresa", null=True, blank=True,
+        "empresas.Empresa",
         on_delete=models.CASCADE, related_name="atendimentos",
         verbose_name="Empresa",
     )

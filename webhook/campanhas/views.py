@@ -8,6 +8,8 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
+from core.decorators import empresa_required
+
 from .models import Campanha, Contato, DestinatarioCampanha, Segmento
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 # ── Contatos ──────────────────────────────────────────────────────────────────
 
 @login_required
+@empresa_required
 def contato_list(request):
     empresa = request.empresa
     qs = Contato.objects.for_empresa(empresa).order_by("nome")
@@ -34,6 +37,7 @@ def contato_list(request):
 
 
 @login_required
+@empresa_required
 def contato_import_csv(request):
     empresa = request.empresa
     if request.method == "POST":
@@ -92,6 +96,7 @@ def contato_import_csv(request):
 # ── Segmentos ─────────────────────────────────────────────────────────────────
 
 @login_required
+@empresa_required
 def segmento_list(request):
     empresa = request.empresa
     segmentos = Segmento.objects.for_empresa(empresa).order_by("nome")
@@ -99,6 +104,7 @@ def segmento_list(request):
 
 
 @login_required
+@empresa_required
 def segmento_create(request):
     empresa = request.empresa
     contatos = Contato.objects.for_empresa(empresa).filter(ativo=True)
@@ -126,6 +132,7 @@ def segmento_create(request):
 
 
 @login_required
+@empresa_required
 def segmento_detail(request, pk):
     empresa = request.empresa
     seg = get_object_or_404(Segmento.objects.for_empresa(empresa), pk=pk)
@@ -139,6 +146,7 @@ def segmento_detail(request, pk):
 # ── Campanhas ─────────────────────────────────────────────────────────────────
 
 @login_required
+@empresa_required
 def campanha_list(request):
     empresa = request.empresa
     qs = Campanha.objects.for_empresa(empresa).select_related("segmento").order_by("-criado_em")
@@ -151,6 +159,7 @@ def campanha_list(request):
 
 
 @login_required
+@empresa_required
 def campanha_create(request):
     empresa = request.empresa
     from whatsapp.models import CanalWhatsApp, TemplateMensagem
@@ -170,13 +179,25 @@ def campanha_create(request):
             messages.error(request, "Nome e segmento são obrigatórios.")
         else:
             seg = get_object_or_404(Segmento.objects.for_empresa(empresa), pk=segmento_id)
+            template = None
+            if template_id:
+                template = get_object_or_404(
+                    TemplateMensagem.objects.filter(empresa=empresa, ativo=True),
+                    pk=template_id,
+                )
+            canal = None
+            if canal_id:
+                canal = get_object_or_404(
+                    CanalWhatsApp.objects.filter(empresa=empresa, ativo=True),
+                    pk=canal_id,
+                )
             campanha = Campanha.objects.create(
                 empresa=empresa,
                 nome=nome,
                 descricao=descricao,
                 segmento=seg,
-                template_id=template_id,
-                canal_id=canal_id,
+                template=template,
+                canal=canal,
                 agendado_para=agendado_para,
                 criado_por=request.user,
                 status="rascunho",
@@ -193,6 +214,7 @@ def campanha_create(request):
 
 
 @login_required
+@empresa_required
 def campanha_detail(request, pk):
     empresa = request.empresa
     campanha = get_object_or_404(
@@ -215,6 +237,7 @@ def campanha_detail(request, pk):
 
 @login_required
 @require_POST
+@empresa_required
 def campanha_dispatch(request, pk):
     empresa = request.empresa
     campanha = get_object_or_404(Campanha.objects.for_empresa(empresa), pk=pk)
@@ -223,9 +246,15 @@ def campanha_dispatch(request, pk):
         messages.error(request, "Campanha não pode ser disparada neste status.")
         return redirect("campanha-detail", pk=pk)
 
+    from billing.utils import empresa_pode_disparar
     from .tasks import dispatch_campanha
+
+    pode, motivo = empresa_pode_disparar(empresa)
+    if not pode:
+        messages.error(request, motivo)
+        return redirect("campanha-detail", pk=pk)
     campanha.status = "em_andamento"
     campanha.save(update_fields=["status"])
-    dispatch_campanha.delay(campanha.pk)
+    dispatch_campanha.delay(campanha.pk, empresa.pk if empresa else None)
     messages.success(request, f"Disparo iniciado para campanha '{campanha.nome}'.")
     return redirect("campanha-detail", pk=pk)
