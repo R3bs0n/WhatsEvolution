@@ -6,12 +6,10 @@ services:
     image: evolution-api-custom:baileys-6.7.23-wa-2.3000.1035194821
     container_name: evolution_api
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     env_file:
       - .env
     environment:
-      - SERVER_URL=http://localhost:8080
+      - SERVER_URL=https://instancia.sendyou.com.br
       - AUTHENTICATION_TYPE=apikey
       - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
       - DATABASE_ENABLED=true
@@ -77,8 +75,6 @@ services:
       dockerfile: Dockerfile
     container_name: evolution_webhook
     restart: unless-stopped
-    ports:
-      - "8001:8000"
     env_file:
       - .env
     environment:
@@ -179,13 +175,11 @@ services:
         condition: service_healthy
       chatwoot-redis:
         condition: service_healthy
-    ports:
-      - "3010:3000"
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
-      - FRONTEND_URL=http://localhost:3010
+      - FRONTEND_URL=https://chat.sendyou.com.br
       - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
       - POSTGRES_HOST=chatwoot-postgres
       - POSTGRES_PORT=5432
@@ -214,7 +208,7 @@ services:
       - NODE_ENV=production
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
-      - FRONTEND_URL=http://localhost:3000
+      - FRONTEND_URL=https://chat.sendyou.com.br
       - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
       - POSTGRES_HOST=chatwoot-postgres
       - POSTGRES_PORT=5432
@@ -273,8 +267,8 @@ services:
       - "3003:3000"
     environment:
       - DATABASE_URL=postgresql://typebot:${TYPEBOT_POSTGRES_PASSWORD}@typebot-db:5432/typebot
-      - NEXTAUTH_URL=http://localhost:3003
-      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3004
+      - NEXTAUTH_URL=http://177.153.33.234:3003
+      - NEXT_PUBLIC_VIEWER_URL=https://bot.sendyou.com.br
       - ENCRYPTION_SECRET=${TYPEBOT_ENCRYPTION_SECRET}
       - NEXTAUTH_SECRET=${TYPEBOT_NEXTAUTH_SECRET}
       - DISABLE_SIGNUP=false
@@ -297,14 +291,27 @@ services:
     depends_on:
       typebot-db:
         condition: service_healthy
-    ports:
-      - "3004:3000"
     environment:
       - DATABASE_URL=postgresql://typebot:${TYPEBOT_POSTGRES_PASSWORD}@typebot-db:5432/typebot
-      - NEXTAUTH_URL=http://localhost:3003
-      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3004
+      - NEXTAUTH_URL=https://bot.sendyou.com.br
+      - NEXT_PUBLIC_VIEWER_URL=https://bot.sendyou.com.br
       - ENCRYPTION_SECRET=${TYPEBOT_ENCRYPTION_SECRET}
       - NEXTAUTH_SECRET=${TYPEBOT_NEXTAUTH_SECRET}
+    networks:
+      - evo-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     networks:
       - evo-network
 
@@ -316,6 +323,8 @@ volumes:
   chatwoot_redis_data:
   chatwoot_storage:
   typebot_db_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   evo-network:

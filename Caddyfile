@@ -1,0 +1,15 @@
+instancia.sendyou.com.br {
+    reverse_proxy evolution-api:8080
+}
+
+chat.sendyou.com.br {
+    reverse_proxy chatwoot:3000
+}
+
+painel.sendyou.com.br {
+    reverse_proxy webhook:8000
+}
+
+bot.sendyou.com.br {
+    reverse_proxy typebot-viewer:3000
+}
