@@ -270,11 +270,11 @@ services:
       mailhog:
         condition: service_started
     ports:
-      - "3001:3000"
+      - "3003:3000"
     environment:
       - DATABASE_URL=postgresql://typebot:${TYPEBOT_POSTGRES_PASSWORD}@typebot-db:5432/typebot
-      - NEXTAUTH_URL=http://localhost:3001
-      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3002
+      - NEXTAUTH_URL=http://localhost:3003
+      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3004
       - ENCRYPTION_SECRET=${TYPEBOT_ENCRYPTION_SECRET}
       - NEXTAUTH_SECRET=${TYPEBOT_NEXTAUTH_SECRET}
       - DISABLE_SIGNUP=false
@@ -298,11 +298,11 @@ services:
       typebot-db:
         condition: service_healthy
     ports:
-      - "3002:3000"
+      - "3004:3000"
     environment:
       - DATABASE_URL=postgresql://typebot:${TYPEBOT_POSTGRES_PASSWORD}@typebot-db:5432/typebot
-      - NEXTAUTH_URL=http://localhost:3001
-      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3002
+      - NEXTAUTH_URL=http://localhost:3003
+      - NEXT_PUBLIC_VIEWER_URL=http://localhost:3004
       - ENCRYPTION_SECRET=${TYPEBOT_ENCRYPTION_SECRET}
       - NEXTAUTH_SECRET=${TYPEBOT_NEXTAUTH_SECRET}
     networks:
