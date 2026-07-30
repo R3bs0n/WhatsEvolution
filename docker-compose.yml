@@ -180,12 +180,12 @@ services:
       chatwoot-redis:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "3010:3000"
     environment:
       - NODE_ENV=production
       - RAILS_ENV=production
       - INSTALLATION_ENV=docker
-      - FRONTEND_URL=http://localhost:3000
+      - FRONTEND_URL=http://localhost:3010
       - SECRET_KEY_BASE=${CHATWOOT_SECRET_KEY_BASE}
       - POSTGRES_HOST=chatwoot-postgres
       - POSTGRES_PORT=5432
