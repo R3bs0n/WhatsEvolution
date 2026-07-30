@@ -18,6 +18,10 @@ PyMuPDF>=1.24
 # HTTP
 httpx>=0.27
 
+# 2FA
+django-two-factor-auth[totp]>=1.17
+qrcode[pil]>=7.4
+
 # Testing
 pytest>=8.0
 pytest-django>=4.8

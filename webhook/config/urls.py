@@ -3,8 +3,9 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+from django.views.generic import RedirectView
+from two_factor.urls import urlpatterns as tf_urls
 
-from core.forms import BootstrapAuthenticationForm
 from core.views import dashboard
 from evolution.views import (
     instance_connect,
@@ -15,15 +16,9 @@ from evolution.views import (
 )
 
 urlpatterns = [
+    path("", include(tf_urls)),
     path("admin/", admin.site.urls),
-    path(
-        "login/",
-        auth_views.LoginView.as_view(
-            template_name="registration/login.html",
-            authentication_form=BootstrapAuthenticationForm,
-        ),
-        name="login",
-    ),
+    path("login/", RedirectView.as_view(pattern_name="two_factor:login", permanent=False)),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("", dashboard, name="dashboard"),
     path("atendimentos/", include("atendimentos.urls")),

@@ -34,6 +34,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_static",
+    "two_factor",
     "rest_framework",
     "core",
     "empresas",
@@ -52,6 +56,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "core.middleware.TenantMiddleware",
@@ -120,9 +125,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # "Too many fields sent" e abortou a operação sem apagar nada.
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
 
-LOGIN_URL = "login"
+LOGIN_URL = "two_factor:login"
 LOGIN_REDIRECT_URL = "dashboard"
-LOGOUT_REDIRECT_URL = "login"
+LOGOUT_REDIRECT_URL = "two_factor:login"
 
 REDIS_URL = env.str("REDIS_URL", default="redis://redis:6379/0")
 
