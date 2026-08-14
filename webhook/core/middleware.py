@@ -1,4 +1,37 @@
 from django.db import connection
+from django.shortcuts import redirect
+from django.urls import reverse
+from django_otp import devices_for_user
+
+
+# URLs que não precisam de 2FA configurado (login, setup, static, media, admin)
+_OTP_EXEMPT_PREFIXES = (
+    "/account/",
+    "/logout/",
+    "/static/",
+    "/media/",
+    "/admin/",
+)
+
+
+class ForceOTPSetupMiddleware:
+    """
+    Redireciona usuários autenticados que ainda não configuraram 2FA para a
+    tela de setup. Sem isso, o django-two-factor-auth deixa entrar direto.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (
+            request.user.is_authenticated
+            and not any(request.path.startswith(p) for p in _OTP_EXEMPT_PREFIXES)
+        ):
+            if not list(devices_for_user(request.user, confirmed=True)):
+                return redirect(reverse("two_factor:setup"))
+
+        return self.get_response(request)
 
 
 class TenantMiddleware:
