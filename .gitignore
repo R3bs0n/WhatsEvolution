@@ -27,6 +27,13 @@ coverage.xml
 evolution/instances/
 evolution/store/
 
+# Overrides locais (nao vao pra producao)
+docker-compose.override.yml
+
+# Backups locais (gerados durante sessoes de manutencao/dev -- nunca commitar)
+.backups_*/
+Caddyfile.bak_*
+
 # IDE
 .vscode/
 .idea/
