@@ -5,7 +5,10 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 
 from atendimentos.models import Atendimento, SituacaoAtendimento
+from core.tenant_context import set_session_tenant
 from empresas.models import Empresa, MembroEmpresa
+
+from .auth_helpers import login_with_2fa
 
 
 def _make_empresa():
@@ -17,12 +20,14 @@ def _make_empresa():
 
 def _make_situacao(nome="Agendado", empresa=None):
     empresa = empresa or _make_empresa()
+    set_session_tenant(empresa.pk)
     obj, _ = SituacaoAtendimento.objects.get_or_create(nome=nome, empresa=empresa)
     return obj
 
 
 def _make_atendimento(**kwargs):
     empresa = kwargs.pop("empresa", None) or _make_empresa()
+    set_session_tenant(empresa.pk)
     defaults = dict(
         empresa=empresa,
         situacao=_make_situacao(empresa=empresa),
@@ -41,7 +46,7 @@ class AuthenticatedTestCase(TestCase):
         self.empresa = _make_empresa()
         MembroEmpresa.objects.create(usuario=self.user, empresa=self.empresa, papel="operador")
         self.client = Client()
-        self.client.login(username="testuser", password="pass123")
+        login_with_2fa(self.client, self.user, "pass123")
 
 
 class AtendimentoListTest(AuthenticatedTestCase):

@@ -6,11 +6,15 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 
 from atendimentos.models import Atendimento, SituacaoAtendimento
+from core.tenant_context import set_session_tenant
 from empresas.models import Empresa, MembroEmpresa
 from whatsapp.services.message_builder import build_message
 
+from .auth_helpers import login_with_2fa
+
 
 def _make_situacao(empresa):
+    set_session_tenant(empresa.pk)
     obj, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado", empresa=empresa)
     return obj
 
@@ -36,7 +40,7 @@ class SendPanelTest(TestCase):
         self.empresa = Empresa.objects.create(nome="Empresa Teste", slug="empresa-teste")
         MembroEmpresa.objects.create(usuario=self.user, empresa=self.empresa, papel="operador")
         self.client = Client()
-        self.client.login(username="op", password="pass")
+        login_with_2fa(self.client, self.user, "pass")
 
     def test_get_returns_200(self):
         response = self.client.get(reverse("whatsapp-send"))
@@ -52,6 +56,8 @@ class SendPanelTest(TestCase):
             mock_task.apply_async = lambda args, countdown: None
             self.client.post(reverse("whatsapp-send"))
 
+        # TenantMiddleware reseta o tenant no finally ao fim da request.
+        set_session_tenant(self.empresa.pk)
         for r in records:
             r.refresh_from_db()
             assert r.status_enviado == "E"

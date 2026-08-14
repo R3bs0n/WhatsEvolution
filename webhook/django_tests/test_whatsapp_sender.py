@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase, override_settings
 
 from atendimentos.models import Atendimento, SituacaoAtendimento
+from core.tenant_context import set_session_tenant
 from empresas.models import Empresa
 from whatsapp.models import EnvioWhatsAppLog
 from whatsapp.services.fake_provider import FakeWhatsAppProvider
@@ -92,6 +93,7 @@ class MessageBuilderTest(TestCase):
 class SendServiceTest(TestCase):
     def _make_atendimento(self, telefone="92999999999", status="N"):
         empresa = _make_empresa()
+        set_session_tenant(empresa.pk)
         situacao, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado", empresa=empresa)
         return Atendimento.objects.create(
             empresa=empresa,
@@ -167,6 +169,7 @@ class SendServiceTest(TestCase):
 class CeleryTaskTest(TestCase):
     def _make_atendimento(self, status="N"):
         empresa = _make_empresa()
+        set_session_tenant(empresa.pk)
         situacao, _ = SituacaoAtendimento.objects.get_or_create(nome="Agendado", empresa=empresa)
         return Atendimento.objects.create(
             empresa=empresa,
@@ -196,6 +199,9 @@ class CeleryTaskTest(TestCase):
         atend = self._make_atendimento(status="N")
         result = send_whatsapp_for_atendimento.run(atend.pk)
         assert result is True
+        # A task chama reset_session_tenant() no finally dela — reconfigura
+        # antes de consultar de novo fora do ciclo da task.
+        set_session_tenant(atend.empresa_id)
         atend.refresh_from_db()
         assert atend.status_enviado == "S"
 
@@ -205,6 +211,7 @@ class CeleryTaskTest(TestCase):
         atend = self._make_atendimento(status="E")
         result = send_whatsapp_for_atendimento.run(atend.pk)
         assert result is True
+        set_session_tenant(atend.empresa_id)
         atend.refresh_from_db()
         assert atend.status_enviado == "S"
 
@@ -214,6 +221,7 @@ class CeleryTaskTest(TestCase):
         atend = self._make_atendimento(status="N")
         send_whatsapp_for_atendimento.run(atend.pk)
         send_whatsapp_for_atendimento.run(atend.pk)
+        set_session_tenant(atend.empresa_id)
         log_count = EnvioWhatsAppLog.objects.filter(atendimento=atend).count()
         # First call creates 1 log; second call is skipped (already "S")
         assert log_count == 1

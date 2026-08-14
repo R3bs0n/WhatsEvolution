@@ -3,7 +3,10 @@ from django.test import Client, TestCase
 from django.urls import reverse
 
 from atendimentos.models import Atendimento, SituacaoAtendimento
+from core.tenant_context import reset_session_tenant, session_tenant_context, set_session_tenant
 from empresas.models import Empresa, MembroEmpresa
+
+from .auth_helpers import login_with_2fa
 
 
 class TenantIsolationTest(TestCase):
@@ -16,30 +19,33 @@ class TenantIsolationTest(TestCase):
             empresa=self.empresa_a,
             papel="operador",
         )
-        self.situacao_a = SituacaoAtendimento.objects.create(
-            empresa=self.empresa_a,
-            nome="Agendado",
-        )
-        self.situacao_b = SituacaoAtendimento.objects.create(
-            empresa=self.empresa_b,
-            nome="Agendado",
-        )
-        self.atendimento_a = Atendimento.objects.create(
-            empresa=self.empresa_a,
-            situacao=self.situacao_a,
-            paciente="Paciente Empresa A",
-            telefone="92999999999",
-            exame_procedimento="Hemograma",
-        )
-        self.atendimento_b = Atendimento.objects.create(
-            empresa=self.empresa_b,
-            situacao=self.situacao_b,
-            paciente="Paciente Empresa B",
-            telefone="92988888888",
-            exame_procedimento="TSH",
-        )
+        with session_tenant_context(self.empresa_a.pk):
+            self.situacao_a = SituacaoAtendimento.objects.create(
+                empresa=self.empresa_a,
+                nome="Agendado",
+            )
+            self.atendimento_a = Atendimento.objects.create(
+                empresa=self.empresa_a,
+                situacao=self.situacao_a,
+                paciente="Paciente Empresa A",
+                telefone="92999999999",
+                exame_procedimento="Hemograma",
+            )
+        with session_tenant_context(self.empresa_b.pk):
+            self.situacao_b = SituacaoAtendimento.objects.create(
+                empresa=self.empresa_b,
+                nome="Agendado",
+            )
+            self.atendimento_b = Atendimento.objects.create(
+                empresa=self.empresa_b,
+                situacao=self.situacao_b,
+                paciente="Paciente Empresa B",
+                telefone="92988888888",
+                exame_procedimento="TSH",
+            )
+        self.addCleanup(reset_session_tenant)
         self.client = Client()
-        self.client.login(username="user-a", password="pass")
+        login_with_2fa(self.client, self.user_a, "pass")
 
     def test_list_does_not_show_other_tenant_data(self):
         response = self.client.get(reverse("atendimento-list"))
