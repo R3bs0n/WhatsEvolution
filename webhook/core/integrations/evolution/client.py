@@ -21,6 +21,18 @@ class EvolutionClient:
             response.raise_for_status()
             return response.json()
 
+    def send_template(self, phone: str, name: str, language: str, components: list) -> dict:
+        """POST /message/sendTemplate/:instance — schema confirmado ao vivo
+        contra a Evolution instalada (não documentação). `components` já deve
+        vir pronto no formato da Cloud API da Meta — este client não valida
+        nem transforma, só repassa (a própria Evolution faz o mesmo)."""
+        url = f"{self.base_url}/message/sendTemplate/{self.instance}"
+        payload = {"number": phone, "name": name, "language": language, "components": components}
+        with httpx.Client(timeout=15.0) as client:
+            response = client.post(url, json=payload, headers=self._headers)
+            response.raise_for_status()
+            return response.json()
+
     def fetch_instances(self) -> list[dict]:
         url = f"{self.base_url}/instance/fetchInstances"
         with httpx.Client(timeout=15.0) as client:

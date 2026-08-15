@@ -18,6 +18,9 @@ PyMuPDF>=1.24
 # HTTP
 httpx>=0.27
 
+# Criptografia (campos cifrados em repouso, ex.: token Meta)
+cryptography>=42,<44
+
 # 2FA
 django-two-factor-auth[totp]>=1.17
 qrcode[pil]>=7.4

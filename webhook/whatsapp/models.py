@@ -1,10 +1,20 @@
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from core.fields import EncryptedTextField
 from core.managers import TenantManager
 
 
 class CanalWhatsApp(models.Model):
+    PROVIDER_BAILEYS = "WHATSAPP-BAILEYS"
+    PROVIDER_BUSINESS = "WHATSAPP-BUSINESS"
+    PROVIDER_CHOICES = [
+        (PROVIDER_BAILEYS, "WhatsApp (QR Code) — Baileys"),
+        (PROVIDER_BUSINESS, "WhatsApp Business API — Meta (Cloud API oficial)"),
+    ]
+
     empresa = models.ForeignKey(
         "empresas.Empresa",
         on_delete=models.CASCADE,
@@ -13,6 +23,9 @@ class CanalWhatsApp(models.Model):
     nome = models.CharField(max_length=100)
     instance_name = models.CharField(max_length=100, unique=True)
     api_url = models.CharField(max_length=255, blank=True)
+    provider = models.CharField(
+        max_length=20, choices=PROVIDER_CHOICES, default=PROVIDER_BAILEYS
+    )
     principal = models.BooleanField(default=False)
     ativo = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -33,6 +46,98 @@ class CanalWhatsApp(models.Model):
             CanalWhatsApp.objects.filter(
                 empresa=self.empresa, principal=True
             ).exclude(pk=self.pk).update(principal=False)
+        super().save(*args, **kwargs)
+
+
+class MetaCloudCredential(models.Model):
+    """Credenciais da Cloud API oficial (Meta) para um CanalWhatsApp.
+
+    Separado de CanalWhatsApp de propósito: operações comuns sobre canais
+    (listar, checar Chatwoot, etc.) não precisam carregar nem decifrar o
+    token — só quem precisa mesmo das credenciais consulta este modelo.
+
+    `empresa` é redundante em relação a `canal.empresa` (denormalizado de
+    propósito) para que a policy de RLS filtre direto por empresa_id nesta
+    tabela, sem depender de JOIN com whatsapp_canalwhatsapp.
+    """
+
+    STATUS_PENDENTE = "pendente"
+    STATUS_CONFIGURADO = "configurado"
+    STATUS_ERRO = "erro"
+    STATUS_CHOICES = [
+        (STATUS_PENDENTE, "Pendente"),
+        (STATUS_CONFIGURADO, "Configurado"),
+        (STATUS_ERRO, "Erro"),
+    ]
+
+    canal = models.OneToOneField(
+        CanalWhatsApp,
+        on_delete=models.CASCADE,
+        related_name="credencial_meta",
+    )
+    empresa = models.ForeignKey(
+        "empresas.Empresa",
+        on_delete=models.CASCADE,
+        related_name="credenciais_meta",
+    )
+    waba_id = models.CharField(
+        "WABA ID", max_length=50, blank=True,
+        help_text="WhatsApp Business Account ID. Uma WABA pode ter vários números.",
+    )
+    phone_number_id = models.CharField(
+        "Phone Number ID", max_length=50, blank=True,
+    )
+    meta_access_token = EncryptedTextField(
+        "Token de acesso (Meta)", blank=True,
+        help_text="Cifrado em repouso. Nunca exibido em texto puro pelo admin.",
+    )
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDENTE
+    )
+    token_expires_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Preencher só se a Meta informar expiração conhecida para este token.",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+",
+        help_text="Último usuário a definir/alterar este registro.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = TenantManager()
+
+    class Meta:
+        verbose_name = "Credencial Meta Cloud API"
+        verbose_name_plural = "Credenciais Meta Cloud API"
+        ordering = ["empresa", "canal"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["phone_number_id"],
+                condition=models.Q(phone_number_id__gt=""),
+                name="uq_metacloudcredential_phone_number_id",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Credencial Meta — {self.canal.nome} ({self.get_status_display()})"
+
+    def clean(self):
+        super().clean()
+        if self.canal_id and self.empresa_id and self.canal.empresa_id != self.empresa_id:
+            raise ValidationError("A empresa da credencial deve ser a mesma do canal vinculado.")
+        if self.canal_id and self.canal.provider != CanalWhatsApp.PROVIDER_BUSINESS:
+            if self.waba_id or self.phone_number_id or self.meta_access_token:
+                raise ValidationError(
+                    "waba_id/phone_number_id/token só fazem sentido para canais "
+                    f"com provider={CanalWhatsApp.PROVIDER_BUSINESS!r}."
+                )
+
+    def save(self, *args, **kwargs):
+        if not self.empresa_id and self.canal_id:
+            self.empresa_id = self.canal.empresa_id
         super().save(*args, **kwargs)
 
 
@@ -265,6 +370,11 @@ class AtendimentoEnvio(models.Model):
 
 
 class EnvioWhatsAppLog(models.Model):
+    TIPO_ENVIO_CHOICES = [
+        ("texto", "Texto livre"),
+        ("template", "Template (HSM)"),
+    ]
+
     empresa = models.ForeignKey(
         "empresas.Empresa",
         on_delete=models.CASCADE, related_name="envios_whatsapp",
@@ -276,6 +386,9 @@ class EnvioWhatsAppLog(models.Model):
     )
     telefone = models.CharField(max_length=20)
     mensagem = models.TextField()
+    tipo_envio = models.CharField(max_length=10, choices=TIPO_ENVIO_CHOICES, default="texto")
+    template_nome = models.CharField(max_length=100, blank=True)
+    external_message_id = models.CharField(max_length=100, blank=True)
     status_retorno = models.CharField(max_length=100, blank=True)
     codigo_retorno = models.CharField(max_length=50, blank=True)
     detalhe_retorno = models.TextField(blank=True)

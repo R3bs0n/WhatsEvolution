@@ -11,9 +11,16 @@ class WhatsAppSendResult:
     status: str = ""
     code: Optional[str] = None
     detail: Optional[str] = None
+    external_message_id: Optional[str] = None
 
 
 class WhatsAppProvider(ABC):
     @abstractmethod
     def send_message(self, phone: str, message: str) -> WhatsAppSendResult:
+        ...
+
+    @abstractmethod
+    def send_template(
+        self, phone: str, template_name: str, language: str, components: list
+    ) -> WhatsAppSendResult:
         ...

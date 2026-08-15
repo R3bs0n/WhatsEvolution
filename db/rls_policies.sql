@@ -68,6 +68,15 @@ CREATE POLICY tenant_isolation ON whatsapp_configuracaodisparo
     USING (empresa_id = current_empresa_id())
     WITH CHECK (empresa_id = current_empresa_id());
 
+-- whatsapp_metacloudcredential (empresa_id direto na tabela, denormalizado
+-- de canal.empresa_id de propósito -- ver comentário no model Django)
+ALTER TABLE whatsapp_metacloudcredential ENABLE ROW LEVEL SECURITY;
+ALTER TABLE whatsapp_metacloudcredential FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON whatsapp_metacloudcredential;
+CREATE POLICY tenant_isolation ON whatsapp_metacloudcredential
+    USING (empresa_id = current_empresa_id())
+    WITH CHECK (empresa_id = current_empresa_id());
+
 -- whatsapp_templatemensagem
 ALTER TABLE whatsapp_templatemensagem ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whatsapp_templatemensagem FORCE ROW LEVEL SECURITY;

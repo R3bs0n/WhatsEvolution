@@ -16,6 +16,12 @@ for _candidate in (BASE_DIR / ".env", BASE_DIR.parent / ".env"):
 
 DEBUG = env.bool("DEBUG", default=False)
 SECRET_KEY = env.str("SECRET_KEY", default="insecure-dev-key-change-in-production-000")
+
+# Chave de criptografia simétrica (Fernet) para campos cifrados em repouso
+# (ex.: token da Meta em CanalWhatsApp/MetaCloudCredential). SEM default —
+# ausência/valor inválido derruba a subida do Django (ver core.apps.ready()).
+# Gerar com: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+FIELD_ENCRYPTION_KEY = env.str("FIELD_ENCRYPTION_KEY", default="")
 ALLOWED_HOSTS = [
     h.strip()
     for h in env.str("ALLOWED_HOSTS", default="localhost,127.0.0.1,0.0.0.0").split(",")

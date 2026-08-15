@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 
 from core.admin import SuperuserOnlyAdminMixin, TenantAdminMixin
@@ -8,6 +9,7 @@ from .models import (
     ConfiguracaoSistema,
     ContatoBloqueado,
     EnvioWhatsAppLog,
+    MetaCloudCredential,
     TemplateMensagem,
 )
 
@@ -43,13 +45,66 @@ class ConfiguracaoSistemaAdmin(SuperuserOnlyAdminMixin, admin.ModelAdmin):
 
 @admin.register(CanalWhatsApp)
 class CanalWhatsAppAdmin(TenantAdminMixin, admin.ModelAdmin):
-    list_display = ("nome", "instance_name", "empresa", "principal", "ativo", "created_at")
-    list_filter = ("empresa", "principal", "ativo")
+    list_display = ("nome", "instance_name", "empresa", "provider", "principal", "ativo", "created_at")
+    list_filter = ("empresa", "provider", "principal", "ativo")
     search_fields = ("nome", "instance_name")
     fieldsets = (
-        (None, {"fields": ("empresa", "nome", "instance_name", "api_url")}),
+        (None, {"fields": ("empresa", "nome", "instance_name", "api_url", "provider")}),
         ("Config", {"fields": ("principal", "ativo")}),
     )
+
+
+class MetaCloudCredentialForm(forms.ModelForm):
+    """Token é write-only: nunca é pré-preenchido nem reexibido. Deixar o
+    campo 'novo_token' em branco ao salvar mantém o token atual intacto."""
+
+    novo_token = forms.CharField(
+        label="Definir/substituir token de acesso",
+        required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Deixe em branco para manter o token atual sem alteração.",
+    )
+
+    class Meta:
+        model = MetaCloudCredential
+        exclude = ("meta_access_token", "updated_by")
+
+    def clean(self):
+        cleaned_data = super().clean()
+        # Aplica o novo token à instância ANTES do full_clean() do model
+        # (chamado em _post_clean(), logo depois deste clean()), para que a
+        # validação de consistência provider/token em MetaCloudCredential.clean()
+        # veja o valor que está de fato sendo gravado.
+        novo_token = cleaned_data.get("novo_token")
+        if novo_token:
+            self.instance.meta_access_token = novo_token
+        return cleaned_data
+
+
+@admin.register(MetaCloudCredential)
+class MetaCloudCredentialAdmin(TenantAdminMixin, admin.ModelAdmin):
+    form = MetaCloudCredentialForm
+    list_display = ("canal", "empresa", "status", "token_status", "updated_by", "updated_at")
+    list_filter = ("empresa", "status")
+    search_fields = ("canal__nome", "waba_id", "phone_number_id")
+    readonly_fields = ("token_status", "updated_by", "created_at", "updated_at")
+    fieldsets = (
+        (None, {"fields": ("empresa", "canal", "status")}),
+        ("Cloud API (Meta)", {"fields": ("waba_id", "phone_number_id", "token_expires_at")}),
+        ("Token", {"fields": ("token_status", "novo_token")}),
+        ("Auditoria", {"fields": ("updated_by", "created_at", "updated_at")}),
+    )
+
+    @admin.display(description="Token")
+    def token_status(self, obj):
+        if obj is None or not obj.pk:
+            return "não definido"
+        return "•••• definido" if obj.meta_access_token else "não definido"
+
+    def save_model(self, request, obj, form, change):
+        if form.cleaned_data.get("novo_token"):
+            obj.updated_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(ConfiguracaoDisparo)
