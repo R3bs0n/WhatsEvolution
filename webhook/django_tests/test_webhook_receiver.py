@@ -98,6 +98,31 @@ class WebhookReceiverMethodTest(TestCase):
         })
         assert response.status_code == 200
 
+    def test_post_without_any_secret_returns_401(self):
+        factory = RequestFactory()
+        body = json.dumps({"event": "UNKNOWN", "instance": "test", "data": {}}).encode()
+        request = factory.post("/webhook/", data=body, content_type="application/json")
+        response = webhook_receiver(request)
+        assert response.status_code == 401
+
+    def test_post_with_wrong_secret_returns_401(self):
+        factory = RequestFactory()
+        body = json.dumps({"event": "UNKNOWN", "instance": "test", "data": {}}).encode()
+        request = factory.post(
+            "/webhook/", data=body, content_type="application/json",
+            HTTP_APIKEY="secret-errado",
+        )
+        response = webhook_receiver(request)
+        assert response.status_code == 401
+
+    def test_post_with_wrong_route_token_returns_401(self):
+        response = _post_route_secret(
+            webhook_receiver,
+            {"event": "UNKNOWN", "instance": "test", "data": {}},
+            token="token-errado",
+        )
+        assert response.status_code == 401
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Event name normalisation (lowercase dot vs UPPERCASE_UNDERSCORE)

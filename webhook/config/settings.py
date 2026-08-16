@@ -166,6 +166,12 @@ EVOLUTION_API_URL = env.str("EVOLUTION_API_URL", default="http://evolution-api:8
 EVOLUTION_API_KEY = env.str("EVOLUTION_API_KEY", default="")
 EVOLUTION_INSTANCE_NAME = env.str("EVOLUTION_INSTANCE_NAME", default="clinica")
 EVOLUTION_WEBHOOK_SECRET = env.str("EVOLUTION_WEBHOOK_SECRET", default="")
+# App Secret da Meta, usado só pra validar X-Hub-Signature-256 no gateway
+# público de webhook (evolution/meta_gateway.py). Default vazio de propósito:
+# ausência faz o gateway rejeitar toda requisição (fail-closed), sem nenhum
+# bypass de DEBUG=True, ao contrário do EVOLUTION_WEBHOOK_SECRET acima.
+META_APP_SECRET = env.str("META_APP_SECRET", default="")
+
 
 DEFAULT_COUNTRY_CODE = env.str("DEFAULT_COUNTRY_CODE", default="55")
 WHATSAPP_PROVIDER = env.str("WHATSAPP_PROVIDER", default="evolution")
