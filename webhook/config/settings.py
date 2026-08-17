@@ -65,6 +65,7 @@ MIDDLEWARE = [
     "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.ForceOTPSetupMiddleware",
     "core.middleware.TenantMiddleware",
 ]
 

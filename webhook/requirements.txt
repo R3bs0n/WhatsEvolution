@@ -24,6 +24,7 @@ cryptography>=42,<44
 # 2FA
 django-two-factor-auth[totp]>=1.17
 qrcode[pil]>=7.4
+Pillow>=10.0
 
 # Testing
 pytest>=8.0
