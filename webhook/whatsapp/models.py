@@ -94,6 +94,11 @@ class MetaCloudCredential(models.Model):
     status = models.CharField(
         max_length=12, choices=STATUS_CHOICES, default=STATUS_PENDENTE
     )
+    detalhe_provisionamento = models.TextField(
+        blank=True,
+        help_text="Mensagem sanitizada do último provisionamento na Evolution "
+        "(nunca contém o token). Preenchido por whatsapp/services/channel_provisioning.py.",
+    )
     token_expires_at = models.DateTimeField(
         null=True, blank=True,
         help_text="Preencher só se a Meta informar expiração conhecida para este token.",

@@ -40,7 +40,10 @@ docker exec -e PGPASSWORD="$TEST_ROLE_PASSWORD" evolution_postgres \
   createdb -U "$TEST_ROLE_USER" -h localhost "$TEST_DB_NAME"
 
 echo "==> Privilegios padrao (tabelas futuras criadas por $TEST_ROLE_USER -> app_role)..."
-docker exec -e PGPASSWORD="$TEST_ROLE_PASSWORD" evolution_postgres \
+# -i e obrigatorio aqui: sem ele, o docker exec nao anexa o stdin neste
+# ambiente (Windows/Git Bash) e o heredoc nunca chega no psql -- silencioso,
+# sem erro, exit 0, e o GRANT nunca acontece de verdade (achado 2026-08-17).
+docker exec -i -e PGPASSWORD="$TEST_ROLE_PASSWORD" evolution_postgres \
   psql -U "$TEST_ROLE_USER" -h localhost -d "$TEST_DB_NAME" -v ON_ERROR_STOP=1 <<SQL
 ALTER DEFAULT PRIVILEGES FOR ROLE $TEST_ROLE_USER IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_role;
 ALTER DEFAULT PRIVILEGES FOR ROLE $TEST_ROLE_USER IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO app_role;
@@ -57,7 +60,8 @@ echo "==> Privilegios retroativos nas tabelas ja criadas pelo migrate acima..."
 # ALTER DEFAULT PRIVILEGES sozinho nao foi suficiente em teste real (2026-08-14
 # -- django_migrations ficou sem grant pro app_role, causando "permission
 # denied" nos testes). GRANT explicito em tudo que ja existe e mais robusto.
-docker exec -e PGPASSWORD="$TEST_ROLE_PASSWORD" evolution_postgres \
+# -i obrigatorio pelo mesmo motivo do bloco acima (stdin do heredoc).
+docker exec -i -e PGPASSWORD="$TEST_ROLE_PASSWORD" evolution_postgres \
   psql -U "$TEST_ROLE_USER" -h localhost -d "$TEST_DB_NAME" -v ON_ERROR_STOP=1 <<SQL
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_role;

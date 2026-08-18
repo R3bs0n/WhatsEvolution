@@ -6,6 +6,8 @@ RLS aplicado — por isso qualquer criação/leitura de dado em tabela protegida
 precisa passar pelo contexto de tenant (core.tenant_context), exatamente como
 uma request real passaria pelo TenantMiddleware.
 """
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import IntegrityError, connection, transaction
@@ -284,6 +286,32 @@ class MetaCloudCredentialAdminTests(TestCase):
         self.cred.refresh_from_db()
         self.assertEqual(self.cred.meta_access_token, novo)
         self.assertEqual(self.cred.updated_by_id, self.admin_user.pk)
+
+    def test_provisionar_canal_evolution_action_rejects_large_selection(self):
+        """A ação chama a Evolution de forma síncrona pra cada credencial
+        selecionada, dentro da própria request do admin -- selecionar
+        demais arriscaria timeout. O guard deve barrar ANTES de chamar
+        provision_meta_channel pra qualquer item da seleção (achado do Codex
+        na revisão do provisionamento)."""
+        outros = [
+            MetaCloudCredential.objects.create(
+                canal=_make_canal_business(self.empresa, instance_name=f"canal-lote-{i}"),
+                empresa=self.empresa, meta_access_token=PLAINTEXT_TOKEN,
+                phone_number_id=f"lote-{i}",
+            )
+            for i in range(10)  # + self.cred já criado no setUp = 11 no total
+        ]
+        pks = [self.cred.pk] + [c.pk for c in outros]
+
+        with patch("whatsapp.admin.provision_meta_channel") as mock_provision:
+            response = self.client.post("/admin/whatsapp/metacloudcredential/", {
+                "action": "provisionar_canal_evolution",
+                "_selected_action": [str(pk) for pk in pks],
+            }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        mock_provision.assert_not_called()
+        self.assertIn(b"m\xc3\xa1ximo", response.content)  # "máximo" (utf-8) na mensagem de erro
 
 
 class MetaCloudCredentialTenantIsolationTests(TestCase):

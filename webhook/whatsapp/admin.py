@@ -12,6 +12,7 @@ from .models import (
     MetaCloudCredential,
     TemplateMensagem,
 )
+from .services.channel_provisioning import ChannelProvisioningError, provision_meta_channel
 
 
 @admin.register(EnvioWhatsAppLog)
@@ -87,11 +88,13 @@ class MetaCloudCredentialAdmin(TenantAdminMixin, admin.ModelAdmin):
     list_display = ("canal", "empresa", "status", "token_status", "updated_by", "updated_at")
     list_filter = ("empresa", "status")
     search_fields = ("canal__nome", "waba_id", "phone_number_id")
-    readonly_fields = ("token_status", "updated_by", "created_at", "updated_at")
+    readonly_fields = ("token_status", "detalhe_provisionamento", "updated_by", "created_at", "updated_at")
+    actions = ["provisionar_canal_evolution"]
     fieldsets = (
         (None, {"fields": ("empresa", "canal", "status")}),
         ("Cloud API (Meta)", {"fields": ("waba_id", "phone_number_id", "token_expires_at")}),
         ("Token", {"fields": ("token_status", "novo_token")}),
+        ("Provisionamento na Evolution", {"fields": ("detalhe_provisionamento",)}),
         ("Auditoria", {"fields": ("updated_by", "created_at", "updated_at")}),
     )
 
@@ -105,6 +108,33 @@ class MetaCloudCredentialAdmin(TenantAdminMixin, admin.ModelAdmin):
         if form.cleaned_data.get("novo_token"):
             obj.updated_by = request.user
         super().save_model(request, obj, form, change)
+
+    _MAX_PROVISIONAMENTO_POR_ACAO = 10
+
+    @admin.action(description="Provisionar canal na Evolution (só cria se ainda não existir)")
+    def provisionar_canal_evolution(self, request, queryset):
+        """Ação EXPLÍCITA — nunca dispara sozinha a partir de um save comum.
+        Escopo desta etapa: só provisionamento inicial, sem delete/recreate.
+
+        Processa cada credencial de forma síncrona (chamada HTTP real pra
+        Evolution) dentro da própria request do admin -- limita a quantidade
+        selecionada de uma vez pra não arriscar timeout de request com
+        seleções grandes (achado do Codex na revisão)."""
+        if queryset.count() > self._MAX_PROVISIONAMENTO_POR_ACAO:
+            self.message_user(
+                request,
+                f"Selecione no máximo {self._MAX_PROVISIONAMENTO_POR_ACAO} credenciais por vez "
+                "(evita timeout da requisição — cada uma é uma chamada síncrona à Evolution).",
+                level="ERROR",
+            )
+            return
+        for credencial in queryset:
+            try:
+                provision_meta_channel(credencial.pk)
+            except ChannelProvisioningError as exc:
+                self.message_user(request, f"{credencial}: {exc}", level="ERROR")
+            else:
+                self.message_user(request, f"{credencial}: provisionamento concluído.", level="SUCCESS")
 
 
 @admin.register(ConfiguracaoDisparo)
