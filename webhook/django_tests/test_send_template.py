@@ -174,6 +174,47 @@ class EvolutionWhatsAppProviderSendTemplateTests(TestCase):
         self.assertEqual(resultado.status, "HTTP_ERROR")
         self.assertEqual(resultado.code, "400")
 
+    def test_http_error_body_echoing_token_never_reaches_detail(self):
+        """Achado do Codex na revisão do módulo de envio unitário: o `detail`
+        persistido em EnvioWhatsAppLog vem direto do que este provider
+        devolve. Se a Evolution/Meta ecoasse o token que acabamos de enviar
+        no corpo de um erro HTTP (payload inválido, etc.), a versão antiga
+        gravava `exc.response.text[:500]` cru -- vazamento real. Simula
+        exatamente esse corpo e confirma que `detail` nunca contém o token,
+        só o status code."""
+        provider = self._provider()
+        token_que_acabamos_de_enviar = "EAAG-token-real-nao-deve-vazar-1234567890"
+        request = httpx.Request("POST", "http://evolution:8080/message/sendTemplate/teste")
+        response = httpx.Response(
+            400, request=request,
+            json={"error": f"invalid parameter, payload was: token={token_que_acabamos_de_enviar}"},
+        )
+        with patch.object(
+            provider._client, "send_template",
+            side_effect=httpx.HTTPStatusError("bad request", request=request, response=response),
+        ):
+            resultado = provider.send_template("5511999999999", "confirmacao_sus", "pt_BR", [])
+
+        self.assertFalse(resultado.success)
+        self.assertNotIn(token_que_acabamos_de_enviar, resultado.detail)
+        self.assertEqual(resultado.detail, "Evolution recusou o envio do template (HTTP 400).")
+
+    def test_response_without_message_id_echoing_token_never_reaches_detail(self):
+        """Mesmo achado, pro caminho 'resposta sem message id' -- a versão
+        antiga gravava `str(raw)[:500]` cru, e a Evolution devolve o token
+        em texto puro em outros endpoints dela (fetchInstances, confirmado
+        ao vivo em sessão anterior) -- não dá pra confiar que este nunca
+        ecoaria algo sensível também."""
+        provider = self._provider()
+        token_que_acabamos_de_enviar = "EAAG-token-real-nao-deve-vazar-9876543210"
+        resposta_suspeita = {"key": {"id": None}, "debug": {"token_usado": token_que_acabamos_de_enviar}}
+        with patch.object(provider._client, "send_template", return_value=resposta_suspeita):
+            resultado = provider.send_template("5511999999999", "confirmacao_sus", "pt_BR", [])
+
+        self.assertFalse(resultado.success)
+        self.assertNotIn(token_que_acabamos_de_enviar, resultado.detail)
+        self.assertEqual(resultado.status, "RESPOSTA_SEM_MESSAGE_ID")
+
 
 class WhatsAppSendServiceSendTemplateTests(TestCase):
     def setUp(self):

@@ -199,8 +199,13 @@ class TemplateMensagem(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Template de mensagem"
-        verbose_name_plural = "Templates de mensagem"
+        # Rótulo deliberadamente desambiguado (2026-08-18): isto é o texto
+        # livre usado por campanhas em massa via Baileys -- não confundir com
+        # o "Template Aprovado (Meta)" do envio unitário via Cloud API
+        # (whatsapp/services/template_registry.py). Mesma tabela/model de
+        # sempre, só o nome exibido muda -- ver nota durável do projeto.
+        verbose_name = "Mensagem de texto da campanha (legado/Baileys)"
+        verbose_name_plural = "Mensagens de texto da campanha (legado/Baileys)"
         ordering = ["empresa", "nome"]
 
     def __str__(self):

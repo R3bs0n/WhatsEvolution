@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Enviar template — Atendimento #{{ object.pk }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3 gap-2">
+  <a href="{% url 'atendimento-detail' object.pk %}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h4 class="mb-0">Enviar Template Aprovado (Meta) — Atendimento #{{ object.pk }}</h4>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header small fw-semibold text-muted">Destinatário</div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-4">Paciente</dt><dd class="col-8">{{ object.paciente|default:"—" }}</dd>
+          <dt class="col-4">Telefone</dt><dd class="col-8">{{ telefone_mascarado }}</dd>
+          <dt class="col-4">Procedimento</dt><dd class="col-8">{{ object.exame_procedimento|default:"—" }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header small fw-semibold text-muted">Canal Business (Cloud API)</div>
+      <div class="card-body">
+        {% if canal %}
+        <dl class="row mb-0 small">
+          <dt class="col-4">Canal</dt><dd class="col-8">{{ canal.nome }}</dd>
+          <dt class="col-4">Credencial</dt>
+          <dd class="col-8">
+            {% if credencial %}
+              <span class="badge bg-success">Configurada</span>
+            {% else %}
+              <span class="badge bg-danger">Não configurada</span>
+            {% endif %}
+          </dd>
+        </dl>
+        {% else %}
+          <span class="badge bg-danger">Nenhum canal WHATSAPP-BUSINESS ativo/principal</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header small fw-semibold text-muted">Template Aprovado (Meta)</div>
+      <div class="card-body">
+        {% if not templates_disponiveis %}
+          <p class="text-danger mb-0">Nenhum template aprovado está registrado no sistema.</p>
+        {% else %}
+        <form method="get" class="row g-2 align-items-end mb-3" id="form-selecionar-template">
+          <div class="col-auto">
+            <label class="form-label small fw-semibold mb-1">Template</label>
+            {# name+idioma sempre juntos num único value ("nome::idioma") -- nunca dois
+               campos separados. Dois templates com o mesmo nome em idiomas diferentes
+               teriam o mesmo value se só o nome fosse usado, e ficaria ambíguo qual
+               idioma foi de fato escolhido (achado do Codex na revisão). #}
+            <select name="template_choice" class="form-select form-select-sm" onchange="this.form.submit()" {% if templates_disponiveis|length < 2 %}disabled{% endif %}>
+              {% for nome, idioma in templates_disponiveis %}
+                <option value="{{ nome }}::{{ idioma }}" {% if nome == template_name and idioma == language %}selected{% endif %}>
+                  {{ nome }} ({{ idioma }})
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </form>
+
+        <p class="small text-muted mb-2">Parâmetros que serão enviados, na ordem do template (posicional — índice 0
+          = {% templatetag openvariable %}1{% templatetag closevariable %}, índice 1 =
+          {% templatetag openvariable %}2{% templatetag closevariable %}):</p>
+        <table class="table table-sm">
+          <thead class="table-light"><tr><th>#</th><th>Variável</th><th>Valor</th></tr></thead>
+          <tbody>
+            {% for p in parametros_preview %}
+            <tr class="{% if p.faltando %}table-danger{% endif %}">
+              <td>{{ p.posicao }}</td>
+              <td><code>{{ p.nome }}</code></td>
+              <td>
+                {% if p.faltando %}
+                  <span class="text-danger">— faltando —</span>
+                {% else %}
+                  {{ p.valor }}
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    {% if not pode_enviar %}
+      <div class="alert alert-danger mb-3">
+        <strong>Envio bloqueado:</strong> {{ motivo_bloqueio }}
+      </div>
+    {% endif %}
+
+    <form method="post" id="form-enviar-template" onsubmit="return confirmarEnvioUnico(this)">
+      {% csrf_token %}
+      <input type="hidden" name="template_choice" value="{{ template_name }}::{{ language }}">
+      <button type="submit" id="btn-enviar-template" class="btn btn-success" {% if not pode_enviar %}disabled{% endif %}>
+        <i class="bi bi-send-fill me-1"></i>Enviar
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+// Prevenção de clique duplo: desabilita o botão e troca o texto assim que o
+// form é submetido, pra nunca disparar o mesmo template duas vezes por causa
+// de um segundo clique (risco real durante gravação/demo).
+function confirmarEnvioUnico(form) {
+  const btn = document.getElementById('btn-enviar-template');
+  if (btn.dataset.enviando === '1') {
+    return false; // segunda chamada (duplo clique) -- ignora
+  }
+  btn.dataset.enviando = '1';
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+  return true;
+}
+</script>
+{% endblock %}

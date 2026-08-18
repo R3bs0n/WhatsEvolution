@@ -12,6 +12,55 @@ from whatsapp.services.template_registry import TemplateVariableError, build_tem
 logger = logging.getLogger(__name__)
 
 
+def resolve_canal_business(empresa):
+    """Canal WHATSAPP-BUSINESS ativo/principal da empresa, ou None.
+
+    Único ponto de resolução -- `send_template_for_atendimento` e qualquer
+    tela de pré-visualização (ex.: envio unitário) devem chamar esta função,
+    nunca repetir o filtro, pra nunca divergir sobre "qual canal vai ser
+    usado" entre o que a tela mostra e o que é de fato enviado."""
+    from whatsapp.models import CanalWhatsApp
+
+    if not empresa:
+        return None
+    return CanalWhatsApp.objects.filter(
+        empresa=empresa, principal=True, ativo=True,
+        provider=CanalWhatsApp.PROVIDER_BUSINESS,
+    ).first()
+
+
+def resolve_credencial_configurada(canal):
+    """MetaCloudCredential com status=configurado pro canal, ou None.
+
+    Nunca decifra o token (.defer()) -- mesmo motivo do achado real documentado
+    em send_template_for_atendimento: `canal.credencial_meta` (relação
+    reversa) faz um SELECT * implícito que decifraria o campo à toa."""
+    if canal is None:
+        return None
+    from whatsapp.models import MetaCloudCredential
+
+    credencial = (
+        MetaCloudCredential.objects.defer("meta_access_token")
+        .filter(canal=canal)
+        .first()
+    )
+    if credencial is None or credencial.status != MetaCloudCredential.STATUS_CONFIGURADO:
+        return None
+    return credencial
+
+
+def atendimento_template_variables(atendimento) -> dict:
+    """Único ponto que mapeia campos do Atendimento pros nomes de variável
+    usados em TEMPLATE_VARIABLE_ORDER. `send_template_for_atendimento` e
+    qualquer tela de pré-visualização (ex.: envio unitário) devem chamar
+    esta função em vez de repetir o mapeamento -- evita divergência entre o
+    que a tela mostra e o que é de fato enviado."""
+    return {
+        "nome_paciente": atendimento.paciente,
+        "tipo_exame": atendimento.exame_procedimento,
+    }
+
+
 class WhatsAppSendService:
     def __init__(self, provider=None):
         self.provider = provider
@@ -120,7 +169,7 @@ class WhatsAppSendService:
             logger.warning("Telefone inválido (atendimento %s): %s", atendimento.pk, exc)
             return _log_falha("TELEFONE_INVALIDO", str(exc))
 
-        from whatsapp.models import CanalWhatsApp, ContatoBloqueado, MetaCloudCredential
+        from whatsapp.models import ContatoBloqueado, MetaCloudCredential
 
         if ContatoBloqueado.objects.for_empresa(empresa).filter(telefone=phone).exists():
             logger.info(
@@ -129,13 +178,7 @@ class WhatsAppSendService:
             )
             return _log_falha("BLOQUEADO", "Número na lista de opt-out.", phone)
 
-        canal = None
-        if empresa:
-            canal = CanalWhatsApp.objects.filter(
-                empresa=empresa, principal=True, ativo=True,
-                provider=CanalWhatsApp.PROVIDER_BUSINESS,
-            ).first()
-
+        canal = resolve_canal_business(empresa)
         if canal is None:
             logger.error(
                 "Envio de template sem canal WHATSAPP-BUSINESS (atendimento %s, empresa %s)",
@@ -148,19 +191,8 @@ class WhatsAppSendService:
                 phone,
             )
 
-        # .defer("meta_access_token") — NÃO usar `canal.credencial_meta`
-        # (relação reversa): ela faz um SELECT * implícito, e o campo cifrado
-        # decifra no from_db_value() assim que a LINHA é carregada, não só
-        # quando o atributo é lido (achado real, pego pelo teste
-        # test_token_is_never_decrypted_even_if_corrupted). defer() exclui a
-        # coluna do SELECT, então o token nunca é decifrado aqui de verdade.
-        credencial = (
-            MetaCloudCredential.objects.defer("meta_access_token")
-            .filter(canal=canal)
-            .first()
-        )
-
-        if credencial is None or credencial.status != MetaCloudCredential.STATUS_CONFIGURADO:
+        credencial = resolve_credencial_configurada(canal)
+        if credencial is None:
             logger.error(
                 "Envio de template sem credencial Meta configurada (canal %s, atendimento %s)",
                 canal.pk, atendimento.pk,
@@ -174,11 +206,7 @@ class WhatsAppSendService:
 
         try:
             components = build_template_components(
-                template_name, language,
-                {
-                    "nome_paciente": atendimento.paciente,
-                    "tipo_exame": atendimento.exame_procedimento,
-                },
+                template_name, language, atendimento_template_variables(atendimento),
             )
         except TemplateVariableError as exc:
             logger.error(

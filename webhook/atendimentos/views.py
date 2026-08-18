@@ -2,6 +2,8 @@ import csv
 import json
 import logging
 
+import redis
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -9,9 +11,10 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from core.decorators import empresa_required
+from core.services.phone import mask_phone
 
 from .forms import AtendimentoForm
 from .models import Atendimento, StatusAtendimento
@@ -19,6 +22,8 @@ from .models import Atendimento, StatusAtendimento
 logger = logging.getLogger(__name__)
 
 _MSG_DELAY_SECONDS = 3
+_SEND_TEMPLATE_LOCK_PREFIX = "atendimento-send-template-lock:"
+_SEND_TEMPLATE_LOCK_TIMEOUT = 30  # segundos -- folga acima do pior caso (1 chamada HTTP)
 
 
 @login_required
@@ -136,6 +141,160 @@ def atendimento_detail(request, pk):
     )
     logs = obj.whatsapp_logs.order_by("-enviado_em")[:20]
     return render(request, "atendimentos/detail.html", {"object": obj, "logs": logs})
+
+
+@login_required
+@empresa_required
+@require_http_methods(["GET", "POST"])
+def atendimento_send_template(request, pk):
+    """Envio UNITÁRIO de template oficial (Cloud API) pra um Atendimento já
+    salvo. Ação sempre EXPLÍCITA nesta tela -- nunca dispara a partir de
+    save()/signal. Caminho totalmente separado do disparo em massa por texto
+    livre (`atendimento_dispatch`, que continua intocado).
+
+    Escopo desta etapa (aprovado com skill de arquitetura + Codex): só envio
+    unitário; PDF/lote/agendamento/sincronização de template ficam fora.
+    """
+    from whatsapp.services.sender import (
+        WhatsAppSendService,
+        atendimento_template_variables,
+        resolve_canal_business,
+        resolve_credencial_configurada,
+    )
+    from whatsapp.services.template_registry import TEMPLATE_VARIABLE_ORDER, list_available_templates
+
+    empresa = request.empresa
+    obj = get_object_or_404(Atendimento.objects.for_empresa(empresa), pk=pk)
+
+    templates_disponiveis = list_available_templates()
+    default_name, default_language = templates_disponiveis[0] if templates_disponiveis else ("", "")
+
+    def _parse_template_choice(valor_bruto):
+        if valor_bruto and "::" in valor_bruto:
+            nome, _, idioma = valor_bruto.partition("::")
+            return nome, idioma
+        return None
+
+    # (template_name, language) sempre chegam JUNTOS num único campo
+    # ("nome::idioma") -- nunca dois campos separados. Dois <option> com o
+    # mesmo nome de template em idiomas diferentes teriam o mesmo `value` se
+    # só o nome fosse usado, e o `selected`/POST ficaria ambíguo sobre qual
+    # idioma foi escolhido de verdade (achado do Codex na revisão).
+    #
+    # GET sem escolha -> cai no padrão (é só a carga inicial da tela, uma
+    # UX razoável). POST sem escolha, vazio ou sem "::" -> NUNCA cai no
+    # padrão silenciosamente -- fica como par inválido e é recusado mais
+    # abaixo (achado do Codex: um POST forjado sem separador não pode
+    # acabar enviando o template padrão como se fosse o escolhido).
+    if request.method == "POST":
+        parsed = _parse_template_choice(request.POST.get("template_choice"))
+        template_name, language = parsed if parsed else ("", "")
+    else:
+        parsed = _parse_template_choice(request.GET.get("template_choice"))
+        template_name, language = parsed if parsed else (default_name, default_language)
+
+    # Nunca aceitar um par (template_name, language) que não esteja
+    # registrado -- inclusive vindo de POST, nunca confiar no valor bruto do
+    # form. Único ponto de leitura da lista de templates: template_registry.py.
+    chave_valida = (template_name, language) in TEMPLATE_VARIABLE_ORDER
+
+    canal = resolve_canal_business(empresa)
+    credencial = resolve_credencial_configurada(canal) if canal else None
+
+    variaveis = atendimento_template_variables(obj)
+    ordem_variaveis = TEMPLATE_VARIABLE_ORDER.get((template_name, language), []) if chave_valida else []
+    variaveis_faltando = [nome for nome in ordem_variaveis if not variaveis.get(nome)]
+    # Lista já pronta pra iterar no template (Django templates não fazem
+    # lookup dinâmico de dict por variável) -- {{1}}/{{2}} são posicionais.
+    parametros_preview = [
+        {"posicao": i, "nome": nome, "valor": variaveis.get(nome, ""), "faltando": nome in variaveis_faltando}
+        for i, nome in enumerate(ordem_variaveis)
+    ]
+
+    motivo_bloqueio = ""
+    if not templates_disponiveis:
+        motivo_bloqueio = "Nenhum template aprovado está registrado no sistema."
+    elif not chave_valida:
+        motivo_bloqueio = "Template selecionado é inválido."
+    elif canal is None:
+        motivo_bloqueio = (
+            "Nenhum canal WHATSAPP-BUSINESS ativo/principal para esta empresa "
+            "(envio por template exige Cloud API oficial, não Baileys)."
+        )
+    elif credencial is None:
+        motivo_bloqueio = f"Credencial Meta Cloud API do canal '{canal.nome}' ausente ou não configurada."
+    elif variaveis_faltando:
+        motivo_bloqueio = f"Faltam dados no atendimento para: {', '.join(variaveis_faltando)}."
+
+    pode_enviar = not motivo_bloqueio
+
+    if request.method == "POST":
+        from billing.utils import empresa_pode_disparar
+
+        if not pode_enviar:
+            messages.error(request, f"Envio recusado: {motivo_bloqueio}")
+            return redirect("atendimento-send-template", pk=obj.pk)
+
+        pode, motivo = empresa_pode_disparar(empresa)
+        if not pode:
+            messages.error(request, motivo)
+            return redirect("atendimento-send-template", pk=obj.pk)
+
+        lock_key = f"{_SEND_TEMPLATE_LOCK_PREFIX}{obj.pk}"
+        lock = redis.Redis.from_url(settings.REDIS_URL).lock(lock_key, timeout=_SEND_TEMPLATE_LOCK_TIMEOUT)
+
+        try:
+            adquirido = lock.acquire(blocking=False)
+        except redis.exceptions.RedisError as exc:
+            logger.error(
+                "Envio de template (lock) do atendimento %s: falha ao falar com o Redis (%s).",
+                obj.pk, type(exc).__name__,
+            )
+            messages.error(request, "Não foi possível travar o envio (falha de infraestrutura). Tente novamente.")
+            return redirect("atendimento-send-template", pk=obj.pk)
+
+        if not adquirido:
+            messages.warning(request, "Já existe um envio em andamento para este atendimento. Aguarde.")
+            return redirect("atendimento-send-template", pk=obj.pk)
+
+        try:
+            sucesso = WhatsAppSendService().send_template_for_atendimento(obj, template_name, language)
+        finally:
+            # O envio em si (send_template_for_atendimento) já terminou aqui --
+            # sucesso ou falha já foi decidido e persistido em EnvioWhatsAppLog.
+            # Uma falha ao liberar o lock (ownership perdida ou erro de conexão
+            # no Redis) NUNCA pode virar um 500 cru que esconda esse resultado
+            # do operador e o leve a clicar Enviar de novo por engano.
+            try:
+                lock.release()
+            except redis.exceptions.LockError:
+                pass
+            except redis.exceptions.RedisError as exc:
+                logger.error(
+                    "Envio de template (lock release) do atendimento %s: falha ao falar com o Redis (%s).",
+                    obj.pk, type(exc).__name__,
+                )
+
+        if sucesso:
+            messages.success(request, f"Template '{template_name}' enviado com sucesso.")
+        else:
+            ultimo_log = obj.whatsapp_logs.order_by("-enviado_em").first()
+            detalhe = ultimo_log.status_retorno if ultimo_log else "Falha desconhecida."
+            messages.error(request, f"Falha ao enviar template: {detalhe}")
+        return redirect("atendimento-detail", pk=obj.pk)
+
+    return render(request, "atendimentos/send_template.html", {
+        "object": obj,
+        "templates_disponiveis": templates_disponiveis,
+        "template_name": template_name,
+        "language": language,
+        "canal": canal,
+        "credencial": credencial,
+        "parametros_preview": parametros_preview,
+        "pode_enviar": pode_enviar,
+        "motivo_bloqueio": motivo_bloqueio,
+        "telefone_mascarado": mask_phone(obj.telefone) if obj.telefone else "—",
+    })
 
 
 @login_required

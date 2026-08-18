@@ -26,6 +26,17 @@ TEMPLATE_VARIABLE_ORDER: dict[tuple[str, str], list[str]] = {
 }
 
 
+def list_available_templates() -> list[tuple[str, str]]:
+    """(nome, idioma) de todo template com ordem de variáveis registrada.
+
+    Única forma que qualquer UI deve usar pra listar templates disponíveis --
+    nunca hardcodar um nome de template numa view/form. Quando a sincronização
+    real com a Graph API da Meta for construída, esta função (ou o que a
+    substituir) continua sendo o único ponto de leitura.
+    """
+    return list(TEMPLATE_VARIABLE_ORDER.keys())
+
+
 def build_template_components(template_name: str, language: str, variables: dict) -> list[dict]:
     """Monta o `components` no formato da Cloud API a partir de variáveis
     NOMEADAS, na ordem certa pro template. Só suporta corpo de texto simples
